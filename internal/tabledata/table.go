@@ -3,9 +3,10 @@ package tabledata
 import "time"
 
 type Header struct {
-	Title string
-	Key   string
-	Align int
+	Title     string
+	Key       string
+	SortField string
+	Align     int
 }
 
 type Row struct {

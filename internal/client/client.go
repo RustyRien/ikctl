@@ -50,6 +50,149 @@ const resourcesQuery = `query ListResources($filter: JSON, $sort: [String!], $ra
   resourcesCount(filter: $filter)
 }`
 
+const templatesQuery = `query ListTemplates($filter: JSON, $sort: [String!], $range: [Int!]) {
+  templates(filter: $filter, sort: $sort, range: $range) {
+    id
+    name
+    description
+    createdAt
+    updatedAt
+    cloudResourceTypes
+  }
+  templatesCount(filter: $filter)
+}`
+
+const resourceQuery = `query GetResource($id: UUID!) {
+  resource(id: $id) {
+    id
+    name
+    description
+    state
+    status
+    createdAt
+    updatedAt
+    revisionNumber
+    abstract
+    storagePath
+    labels
+    variables
+    outputs
+    dependencyTags
+    dependencyConfig
+    template {
+      id
+      name
+      cloudResourceTypes
+    }
+    workspace {
+      id
+      name
+    }
+    creator {
+      id
+      identifier
+      email
+      displayName
+    }
+    integrationIds {
+      id
+      name
+      integrationProvider
+      integrationType
+    }
+    sourceCodeVersion {
+      id
+      identifier
+      sourceCodeFolder
+      sourceCodeVersion
+      sourceCodeBranch
+      status
+    }
+    parents {
+      id
+      name
+      state
+      status
+    }
+    children {
+      id
+      name
+      state
+      status
+    }
+  }
+}`
+
+const templateQuery = `query GetTemplate($id: UUID!) {
+  template(id: $id) {
+    id
+    name
+    description
+    createdAt
+    updatedAt
+    cloudResourceTypes
+  }
+}`
+
+const integrationsQuery = `query ListIntegrations($filter: JSON, $sort: [String!], $range: [Int!]) {
+  integrations(filter: $filter, sort: $sort, range: $range) {
+    id
+    name
+    description
+    createdAt
+    updatedAt
+    integrationProvider
+    integrationType
+  }
+  integrationsCount(filter: $filter)
+}`
+
+const integrationQuery = `query GetIntegration($id: UUID!) {
+  integration(id: $id) {
+    id
+    name
+    description
+    createdAt
+    updatedAt
+    integrationProvider
+    integrationType
+  }
+}`
+
+const logsQuery = `query ListLogs($filter: JSON, $sort: [String!], $range: [Int!]) {
+  logs(filter: $filter, sort: $sort, range: $range) {
+    id
+    entityId
+    entity
+    revision
+    auditLogId
+    level
+    data
+    createdAt
+    executionStart
+    expireAt
+    traceId
+  }
+}`
+
+const auditLogsQuery = `query ListAuditLogs($filter: JSON, $sort: [String!], $range: [Int!]) {
+  auditLogs(filter: $filter, sort: $sort, range: $range) {
+    id
+    model
+    userId
+    action
+    entityId
+    createdAt
+    revisionNumber
+    creator {
+      id
+      identifier
+      email
+      displayName
+    }
+  }
+}`
+
 type Client struct {
 	endpoint   string
 	token      string
@@ -94,6 +237,174 @@ func (c *Client) Resources(ctx context.Context, filter map[string]any, sort []st
 		Items: resp.Resources,
 		Total: resp.ResourcesCount,
 	}, nil
+}
+
+func (c *Client) Resource(ctx context.Context, id string) (*Resource, error) {
+	resp, err := query[resourceQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query: resourceQuery,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Resource, nil
+}
+
+func (c *Client) Templates(ctx context.Context, filter map[string]any, sort []string, pageRange []int) (TemplatesResult, error) {
+	variables := map[string]any{}
+	if filter != nil {
+		variables["filter"] = filter
+	}
+	if len(sort) > 0 {
+		variables["sort"] = sort
+	}
+	if len(pageRange) > 0 {
+		variables["range"] = pageRange
+	}
+
+	resp, err := query[templatesQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query:     templatesQuery,
+		Variables: variables,
+	})
+	if err != nil {
+		return TemplatesResult{}, err
+	}
+
+	return TemplatesResult{Items: resp.Templates, Total: resp.TemplatesCount}, nil
+}
+
+func (c *Client) Template(ctx context.Context, id string) (*Template, error) {
+	resp, err := query[templateQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query: templateQuery,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Template, nil
+}
+
+func (c *Client) Integrations(ctx context.Context, filter map[string]any, sort []string, pageRange []int) (IntegrationsResult, error) {
+	variables := map[string]any{}
+	if filter != nil {
+		variables["filter"] = filter
+	}
+	if len(sort) > 0 {
+		variables["sort"] = sort
+	}
+	if len(pageRange) > 0 {
+		variables["range"] = pageRange
+	}
+
+	resp, err := query[integrationsQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query:     integrationsQuery,
+		Variables: variables,
+	})
+	if err != nil {
+		return IntegrationsResult{}, err
+	}
+
+	return IntegrationsResult{Items: resp.Integrations, Total: resp.IntegrationsCount}, nil
+}
+
+func (c *Client) Integration(ctx context.Context, id string) (*Integration, error) {
+	resp, err := query[integrationQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query: integrationQuery,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Integration, nil
+}
+
+func (c *Client) LogsForResource(ctx context.Context, resourceID string, pageRange []int) ([]Log, int, error) {
+	executionStart, err := c.latestExecutionStart(ctx, resourceID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if executionStart == 0 {
+		return nil, 0, nil
+	}
+	return c.LogsForAudit(ctx, resourceID, "", executionStart, pageRange)
+}
+
+func (c *Client) AuditLogsForResource(ctx context.Context, resourceID string, pageRange []int) ([]AuditLog, error) {
+	variables := map[string]any{
+		"filter": map[string]any{
+			"entity_id": resourceID,
+		},
+		"sort": []string{"created_at", "DESC"},
+	}
+	if len(pageRange) > 0 {
+		variables["range"] = pageRange
+	}
+
+	resp, err := query[auditLogsQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query:     auditLogsQuery,
+		Variables: variables,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.AuditLogs, nil
+}
+
+func (c *Client) LogsForAudit(ctx context.Context, resourceID string, auditLogID string, executionStart int, pageRange []int) ([]Log, int, error) {
+
+	variables := map[string]any{
+		"filter": map[string]any{
+			"entity_id": resourceID,
+		},
+		"sort": []string{"created_at", "DESC"},
+	}
+	if executionStart > 0 {
+		variables["filter"].(map[string]any)["execution_start"] = executionStart
+	}
+	if auditLogID != "" {
+		variables["filter"].(map[string]any)["audit_log_id"] = auditLogID
+	}
+	if len(pageRange) > 0 {
+		variables["range"] = pageRange
+	}
+
+	resp, err := query[logsQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query:     logsQuery,
+		Variables: variables,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return resp.Logs, len(resp.Logs), nil
+}
+
+func (c *Client) latestExecutionStart(ctx context.Context, resourceID string) (int, error) {
+	resp, err := query[logsQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query: logsQuery,
+		Variables: map[string]any{
+			"filter": map[string]any{
+				"entity_id": resourceID,
+			},
+			"sort":  []string{"execution_start", "DESC"},
+			"range": []int{0, 1},
+		},
+	})
+	if err != nil {
+		return 0, err
+	}
+	if len(resp.Logs) == 0 {
+		return 0, nil
+	}
+
+	return resp.Logs[0].ExecutionStart, nil
 }
 
 func query[T any](ctx context.Context, httpClient *http.Client, endpoint string, token string, reqBody graphqlRequest) (T, error) {

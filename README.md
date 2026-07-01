@@ -48,8 +48,14 @@ Precedence: flags > env > config file > defaults.
 ## Keybindings
 
 - `q`, `Ctrl-C`: quit
+- `Ctrl-U`, `Ctrl-D`: move up/down by half a page
 - `/`: enter filter mode, `Enter` to apply, `Esc` to cancel
-- `1`..`6`: sort by a visible column, repeat to toggle direction
+- `Enter`: open selected resource overview
+- `l`: open selected resource logs
+- `Esc`, `q`: close overview/log overlay
+- `s`: enter sort mode, press a highlighted column number, then `a` for ascending or `d` for descending to fetch sorted results from the backend, `Esc` to cancel
+
+The main list shows `Shown / Total` in the status bar and loads more rows from the backend automatically as you scroll near the bottom.
 
 ## InfraKitchen API
 
