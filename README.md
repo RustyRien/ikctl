@@ -16,7 +16,7 @@
 
 - Go `1.25+`
 - Access to an InfraKitchen instance
-- A bearer token for `Authorization: Bearer <token>`
+- Either a bearer token for `Authorization: Bearer <token>` or a stored refresh token via `ikctl login`
 
 ## Build
 
@@ -30,6 +30,8 @@ This produces `bin/ikctl`.
 
 ```bash
 go run . --endpoint http://localhost:8000 --token "$IK_TOKEN"
+go run . login --provider github --refresh-token "$IK_REFRESH_TOKEN"
+go run . login --provider github
 ```
 
 Launch the TUI directly:
@@ -53,6 +55,11 @@ go run . log resources r1 -f
 go run . log resources r1 --since 1h
 go run . log resources r1 --since 1h -f
 go run . log resources r1 --since 2026-07-02T10:30:00Z
+go run . login --provider github --refresh-token "$IK_REFRESH_TOKEN"
+go run . login --provider github
+go run . login --provider microsoft
+go run . login --provider guest --scope infra
+go run . logout
 go run . disable integrations aws-prod
 go run . enable integrations aws-prod
 go run . delete integrations aws-prod
@@ -61,6 +68,8 @@ go run . delete integrations aws-prod
 ## Config
 
 Default config path: `~/.config/ikctl/config.yaml`
+
+Stored auth credentials path: `~/.config/ikctl/credentials.yaml`
 
 ```yaml
 endpoint: http://localhost:8000
@@ -80,6 +89,9 @@ Precedence: flags > env > config file > defaults.
 ## CLI
 
 - `ikctl get <entity>` prints a table and exits.
+- `ikctl login --provider <github|microsoft|guest> [--refresh-token <token>]` stores a manually provided refresh token in `~/.config/ikctl/credentials.yaml` with `0600` permissions, then refreshes a bearer token automatically for later commands.
+- If `--refresh-token` is omitted, `ikctl login` prompts for it interactively and hides the input like a password.
+- `ikctl logout` clears the stored credentials for the active endpoint.
 - `ikctl get <entity> <name-or-id>` fetches a single item.
 - `ikctl describe <entity> <name-or-id>` fetches a single item and prints YAML by default.
 - `ikctl log resources <name-or-id>` shows recent logs and exits.
@@ -93,11 +105,18 @@ Precedence: flags > env > config file > defaults.
 - Output formats: `table`, `wide`, `json`, `yaml`, `name`.
 - Common flags: `-o`, `--sort`, `--sort-order`, `--limit`, `--filter key=value`.
 - Global flags are inherited by subcommands: `--config`, `--endpoint`, `--token`, `--refresh`, `--insecure-skip-tls-verify`, `--no-colors`.
+- Token precedence: `--token` > `IK_TOKEN` > stored login credentials in `~/.config/ikctl/credentials.yaml`.
 - Live log follow mode uses the InfraKitchen GraphQL `logStream(entityName, entityId)` subscription over `graphql-ws` at `/api/graphql`.
 - `--since` accepts either a Go duration like `1h30m` or an RFC3339 timestamp like `2026-07-02T10:30:00Z`.
 - Entity-specific filters:
   - resources: `--state`, `--status`, `--label`
   - integrations: `--provider`, `--type`
+
+Auth notes:
+
+- `--refresh-token` should be the exact InfraKitchen auth cookie value for the selected provider.
+- Use `guest-token` for `guest`, `github-refresh-token` for `github`, and `microsoft-refresh-token` for `microsoft`.
+- `ikctl` stores the refresh token and uses `refreshAuthToken` to mint short-lived bearer tokens for API and websocket requests.
 
 ## Keybindings
 

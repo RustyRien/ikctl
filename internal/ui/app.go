@@ -406,6 +406,14 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 		}
 		return nil
 	case tcell.KeyRune:
+		if event.Rune() == 0x04 {
+			a.table.MoveHalfPage(1)
+			return nil
+		}
+		if event.Rune() == 0x15 {
+			a.table.MoveHalfPage(-1)
+			return nil
+		}
 		switch event.Rune() {
 		case 'q':
 			a.Stop()

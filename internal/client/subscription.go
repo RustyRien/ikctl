@@ -78,10 +78,18 @@ func (c *Client) StreamLogs(ctx context.Context, entityName string, entityID str
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
+	token := ""
+	if c.tokenProvider != nil {
+		token, err = c.tokenProvider.Token(ctx)
+		if err != nil {
+			return fmt.Errorf("resolve bearer token: %w", err)
+		}
+	}
+
 	if err := writeWS(ctx, conn, wsConnectionInit{
 		Type: "connection_init",
 		Payload: map[string]any{
-			"token": c.token,
+			"token": token,
 		},
 	}); err != nil {
 		return err

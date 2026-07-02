@@ -61,15 +61,19 @@ type App struct {
 }
 
 func New(cfg config.Config, build BuildInfo, activeEntity string) *App {
-	ctx, cancel := context.WithCancel(context.Background())
 	client := client.New(cfg)
+	return NewWithClient(cfg, build, activeEntity, client)
+}
+
+func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli *client.Client) *App {
+	ctx, cancel := context.WithCancel(context.Background())
 	ui := uiapp.NewApp(cfg, build.Version)
-	registry := resource.DefaultRegistry(client)
+	registry := resource.DefaultRegistry(cli)
 
 	app := &App{
 		config:     cfg,
 		build:      build,
-		client:     client,
+		client:     cli,
 		models:     map[model.EntityKind]*model.EntityModel{},
 		registry:   registry,
 		kindByName: map[string]model.EntityKind{},

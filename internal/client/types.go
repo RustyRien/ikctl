@@ -1,6 +1,10 @@
 package client
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 type Resource struct {
 	ID                string              `json:"id"`
@@ -155,6 +159,14 @@ type integrationActionMutationData struct {
 	IntegrationAction *entityActionResult `json:"integrationAction"`
 }
 
+type refreshAuthTokenMutationData struct {
+	RefreshAuthToken *RefreshAuthTokenResult `json:"refreshAuthToken"`
+}
+
+type logoutMutationData struct {
+	Logout *logoutResult `json:"logout"`
+}
+
 type deleteIntegrationMutationData struct {
 	DeleteIntegration bool `json:"deleteIntegration"`
 }
@@ -191,6 +203,39 @@ type entityActionResult struct {
 type LogStreamMessage struct {
 	Data  string `json:"data"`
 	Level string `json:"level"`
+}
+
+type RefreshAuthTokenResult struct {
+	Token        string       `json:"token"`
+	Expiration   FlexibleTime `json:"expiration"`
+	Provider     string       `json:"provider"`
+	RefreshToken string       `json:"-"`
+}
+
+type logoutResult struct {
+	Success bool `json:"success"`
+}
+
+type FlexibleTime struct {
+	time.Time
+}
+
+func (t *FlexibleTime) UnmarshalJSON(data []byte) error {
+	raw := strings.Trim(strings.TrimSpace(string(data)), `"`)
+	if raw == "" || raw == "null" {
+		t.Time = time.Time{}
+		return nil
+	}
+
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05.999999-07:00", "2006-01-02 15:04:05-07:00"} {
+		parsed, err := time.Parse(layout, raw)
+		if err == nil {
+			t.Time = parsed
+			return nil
+		}
+	}
+
+	return fmt.Errorf("parse time %q", raw)
 }
 
 type ResourcesResult struct {

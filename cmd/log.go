@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/electrolux-oss/ik-tui/internal/auth"
 	"github.com/electrolux-oss/ik-tui/internal/client"
 	"github.com/electrolux-oss/ik-tui/internal/config"
 	"github.com/electrolux-oss/ik-tui/internal/resource"
@@ -46,8 +47,12 @@ func runLog(cmd *cobra.Command, entity string, nameOrID string, sinceValue strin
 	if err != nil {
 		return err
 	}
+	persistConfig(cmd, &cfg)
 
-	cli := client.New(cfg)
+	cli, err := auth.NewClient(cfg)
+	if err != nil {
+		return err
+	}
 	registry := resource.DefaultRegistry(cli)
 	descriptor, ok := registry.Resolve(entity)
 	if !ok {

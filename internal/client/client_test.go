@@ -43,7 +43,7 @@ func TestResources(t *testing.T) {
 func TestCurrentUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"data":{"currentUser":{"id":"u1","identifier":"alice","displayName":"Alice Doe","email":"alice@example.com","provider":"google","entityName":"user"}}}`)
+		fmt.Fprint(w, `{"data":{"currentUser":{"id":"u1","identifier":"alice","displayName":"Alice Doe","email":"alice@example.com","provider":"github","entityName":"user"}}}`)
 	}))
 	defer server.Close()
 
@@ -55,8 +55,59 @@ func TestCurrentUser(t *testing.T) {
 	if user == nil || user.DisplayName != "Alice Doe" || user.Identifier != "alice" || user.Email != "alice@example.com" {
 		t.Fatalf("user = %#v", user)
 	}
-	if user.Provider != "google" || user.EntityName != "user" {
+	if user.Provider != "github" || user.EntityName != "user" {
 		t.Fatalf("user = %#v", user)
+	}
+}
+
+func TestRefreshAuthToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Fatalf("authorization header = %q", got)
+		}
+		cookie, err := r.Cookie("github-refresh-token")
+		if err != nil {
+			t.Fatalf("missing refresh cookie: %v", err)
+		}
+		if cookie.Value != "refresh-1" {
+			t.Fatalf("refresh cookie = %q", cookie.Value)
+		}
+		w.Header().Set("Set-Cookie", "github-refresh-token=refresh-2; Path=/; HttpOnly")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"refreshAuthToken":{"token":"jwt-1","expiration":"2026-07-02 23:39:39.593976+00:00","provider":"github"}}}`)
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL})
+	result, err := client.RefreshAuthToken(context.Background(), "github", "refresh-1")
+	if err != nil {
+		t.Fatalf("refresh auth token: %v", err)
+	}
+	if result.Token != "jwt-1" || result.Provider != "github" || result.RefreshToken != "refresh-2" {
+		t.Fatalf("result = %#v", result)
+	}
+	if result.Expiration.Time.IsZero() {
+		t.Fatalf("expiration was not parsed: %#v", result)
+	}
+}
+
+func TestLogout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("guest-token")
+		if err != nil {
+			t.Fatalf("missing logout cookie: %v", err)
+		}
+		if cookie.Value != "guest-refresh" {
+			t.Fatalf("logout cookie = %q", cookie.Value)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"logout":{"success":true}}}`)
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL})
+	if err := client.Logout(context.Background(), "guest", "guest-refresh"); err != nil {
+		t.Fatalf("logout: %v", err)
 	}
 }
 

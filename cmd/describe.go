@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/electrolux-oss/ik-tui/internal/client"
+	"github.com/electrolux-oss/ik-tui/internal/auth"
 	"github.com/electrolux-oss/ik-tui/internal/config"
 	"github.com/electrolux-oss/ik-tui/internal/resource"
 	"github.com/spf13/cobra"
@@ -34,8 +34,13 @@ func runDescribe(cmd *cobra.Command, entity string, nameOrID string, output stri
 	if err != nil {
 		return err
 	}
+	persistConfig(cmd, &cfg)
+	cli, err := auth.NewClient(cfg)
+	if err != nil {
+		return err
+	}
 
-	registry := resource.DefaultRegistry(client.New(cfg))
+	registry := resource.DefaultRegistry(cli)
 	descriptor, ok := registry.Resolve(entity)
 	if !ok {
 		return fmt.Errorf("unknown entity %q (valid: %s)", entity, strings.Join(registry.Names(), ", "))

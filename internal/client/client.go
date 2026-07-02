@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"time"
 
@@ -182,6 +184,20 @@ const currentUserQuery = `query CurrentUser {
   }
 }`
 
+const refreshAuthTokenMutation = `mutation RefreshAuthToken {
+  refreshAuthToken {
+    token
+    expiration
+    provider
+  }
+}`
+
+const logoutMutation = `mutation Logout {
+  logout {
+    success
+  }
+}`
+
 const logsQuery = `query ListLogs($filter: JSON, $sort: [String!], $range: [Int!]) {
   logs(filter: $filter, sort: $sort, range: $range) {
     id
@@ -217,21 +233,41 @@ const auditLogsQuery = `query ListAuditLogs($filter: JSON, $sort: [String!], $ra
 }`
 
 type Client struct {
-	endpoint   string
-	token      string
-	httpClient *http.Client
+	endpoint      string
+	tokenProvider TokenProvider
+	httpClient    *http.Client
+}
+
+type TokenProvider interface {
+	Token(context.Context) (string, error)
+}
+
+type StaticToken string
+
+func StaticTokenProvider(token string) TokenProvider {
+	return StaticToken(token)
+}
+
+func (t StaticToken) Token(context.Context) (string, error) {
+	return string(t), nil
 }
 
 func New(cfg config.Config) *Client {
+	return NewWithTokenProvider(cfg, StaticTokenProvider(cfg.Token))
+}
+
+func NewWithTokenProvider(cfg config.Config, tokenProvider TokenProvider) *Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: cfg.InsecureSkipVerify}
+	jar, _ := cookiejar.New(nil)
 
 	return &Client{
-		endpoint: cfg.Endpoint + "/api/graphql",
-		token:    cfg.Token,
+		endpoint:      cfg.Endpoint + "/api/graphql",
+		tokenProvider: tokenProvider,
 		httpClient: &http.Client{
 			Timeout:   15 * time.Second,
 			Transport: transport,
+			Jar:       jar,
 		},
 	}
 }
@@ -248,7 +284,7 @@ func (c *Client) Resources(ctx context.Context, filter map[string]any, sort []st
 		variables["range"] = pageRange
 	}
 
-	resp, err := query[resourcesQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[resourcesQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query:     resourcesQuery,
 		Variables: variables,
 	})
@@ -263,7 +299,7 @@ func (c *Client) Resources(ctx context.Context, filter map[string]any, sort []st
 }
 
 func (c *Client) Resource(ctx context.Context, id string) (*Resource, error) {
-	resp, err := query[resourceQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[resourceQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: resourceQuery,
 		Variables: map[string]any{
 			"id": id,
@@ -287,7 +323,7 @@ func (c *Client) Templates(ctx context.Context, filter map[string]any, sort []st
 		variables["range"] = pageRange
 	}
 
-	resp, err := query[templatesQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[templatesQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query:     templatesQuery,
 		Variables: variables,
 	})
@@ -299,7 +335,7 @@ func (c *Client) Templates(ctx context.Context, filter map[string]any, sort []st
 }
 
 func (c *Client) Template(ctx context.Context, id string) (*Template, error) {
-	resp, err := query[templateQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[templateQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: templateQuery,
 		Variables: map[string]any{
 			"id": id,
@@ -323,7 +359,7 @@ func (c *Client) Integrations(ctx context.Context, filter map[string]any, sort [
 		variables["range"] = pageRange
 	}
 
-	resp, err := query[integrationsQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[integrationsQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query:     integrationsQuery,
 		Variables: variables,
 	})
@@ -335,7 +371,7 @@ func (c *Client) Integrations(ctx context.Context, filter map[string]any, sort [
 }
 
 func (c *Client) Integration(ctx context.Context, id string) (*Integration, error) {
-	resp, err := query[integrationQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[integrationQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: integrationQuery,
 		Variables: map[string]any{
 			"id": id,
@@ -348,13 +384,61 @@ func (c *Client) Integration(ctx context.Context, id string) (*Integration, erro
 }
 
 func (c *Client) CurrentUser(ctx context.Context) (*User, error) {
-	resp, err := query[currentUserQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[currentUserQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: currentUserQuery,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return resp.CurrentUser, nil
+}
+
+func (c *Client) RefreshAuthToken(ctx context.Context, provider string, refreshToken string) (*RefreshAuthTokenResult, error) {
+	cookieName := refreshCookieName(provider)
+	if cookieName == "" {
+		return nil, fmt.Errorf("unsupported auth provider %q", provider)
+	}
+	if strings.TrimSpace(refreshToken) == "" {
+		return nil, errors.New("refresh token is required")
+	}
+
+	endpointURL, err := url.Parse(c.endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("parse endpoint: %w", err)
+	}
+	c.httpClient.Jar.SetCookies(endpointURL, []*http.Cookie{{Name: cookieName, Value: refreshToken, Path: "/"}})
+
+	resp, httpResp, err := queryWithHTTP[refreshAuthTokenMutationData](ctx, c.httpClient, c.endpoint, nil, graphqlRequest{Query: refreshAuthTokenMutation})
+	if err != nil {
+		return nil, err
+	}
+	if resp.RefreshAuthToken == nil {
+		return nil, errors.New("refreshAuthToken returned no token")
+	}
+	resp.RefreshAuthToken.RefreshToken = extractRefreshToken(httpResp, cookieName)
+	if resp.RefreshAuthToken.RefreshToken == "" {
+		resp.RefreshAuthToken.RefreshToken = refreshToken
+	}
+	return resp.RefreshAuthToken, nil
+}
+
+func (c *Client) Logout(ctx context.Context, provider string, refreshToken string) error {
+	cookieName := refreshCookieName(provider)
+	if cookieName != "" && strings.TrimSpace(refreshToken) != "" {
+		endpointURL, err := url.Parse(c.endpoint)
+		if err != nil {
+			return fmt.Errorf("parse endpoint: %w", err)
+		}
+		c.httpClient.Jar.SetCookies(endpointURL, []*http.Cookie{{Name: cookieName, Value: refreshToken, Path: "/"}})
+	}
+	resp, err := query[logoutMutationData](ctx, c.httpClient, c.endpoint, nil, graphqlRequest{Query: logoutMutation})
+	if err != nil {
+		return err
+	}
+	if resp.Logout == nil || !resp.Logout.Success {
+		return errors.New("logout failed")
+	}
+	return nil
 }
 
 func (c *Client) EnableIntegration(ctx context.Context, id string) error {
@@ -366,7 +450,7 @@ func (c *Client) DisableIntegration(ctx context.Context, id string) error {
 }
 
 func (c *Client) DeleteIntegration(ctx context.Context, id string) error {
-	resp, err := query[deleteIntegrationMutationData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[deleteIntegrationMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: deleteIntegrationMutation,
 		Variables: map[string]any{
 			"id": id,
@@ -403,7 +487,7 @@ func (c *Client) AuditLogsForResource(ctx context.Context, resourceID string, pa
 		variables["range"] = pageRange
 	}
 
-	resp, err := query[auditLogsQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[auditLogsQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query:     auditLogsQuery,
 		Variables: variables,
 	})
@@ -432,7 +516,7 @@ func (c *Client) LogsForAudit(ctx context.Context, resourceID string, auditLogID
 		variables["range"] = pageRange
 	}
 
-	resp, err := query[logsQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[logsQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query:     logsQuery,
 		Variables: variables,
 	})
@@ -444,7 +528,7 @@ func (c *Client) LogsForAudit(ctx context.Context, resourceID string, auditLogID
 }
 
 func (c *Client) latestExecutionStart(ctx context.Context, resourceID string) (int, error) {
-	resp, err := query[logsQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	resp, err := query[logsQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: logsQuery,
 		Variables: map[string]any{
 			"filter": map[string]any{
@@ -465,7 +549,7 @@ func (c *Client) latestExecutionStart(ctx context.Context, resourceID string) (i
 }
 
 func (c *Client) integrationAction(ctx context.Context, id string, action string) error {
-	_, err := query[integrationActionMutationData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+	_, err := query[integrationActionMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: integrationActionMutation,
 		Variables: map[string]any{
 			"id": id,
@@ -477,41 +561,52 @@ func (c *Client) integrationAction(ctx context.Context, id string, action string
 	return err
 }
 
-func query[T any](ctx context.Context, httpClient *http.Client, endpoint string, token string, reqBody graphqlRequest) (T, error) {
+func query[T any](ctx context.Context, httpClient *http.Client, endpoint string, tokenProvider TokenProvider, reqBody graphqlRequest) (T, error) {
+	data, _, err := queryWithHTTP[T](ctx, httpClient, endpoint, tokenProvider, reqBody)
+	return data, err
+}
+
+func queryWithHTTP[T any](ctx context.Context, httpClient *http.Client, endpoint string, tokenProvider TokenProvider, reqBody graphqlRequest) (T, *http.Response, error) {
 	var zero T
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return zero, fmt.Errorf("marshal graphql request: %w", err)
+		return zero, nil, fmt.Errorf("marshal graphql request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return zero, fmt.Errorf("build graphql request: %w", err)
+		return zero, nil, fmt.Errorf("build graphql request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if tokenProvider != nil {
+		token, err := tokenProvider.Token(ctx)
+		if err != nil {
+			return zero, nil, fmt.Errorf("resolve bearer token: %w", err)
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return zero, fmt.Errorf("perform graphql request: %w", err)
+		return zero, nil, fmt.Errorf("perform graphql request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return zero, fmt.Errorf("read graphql response: %w", err)
+		return zero, nil, fmt.Errorf("read graphql response: %w", err)
 	}
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return zero, fmt.Errorf("graphql request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return zero, nil, fmt.Errorf("graphql request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
 
 	var payload graphqlResponse[T]
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return zero, fmt.Errorf("decode graphql response: %w", err)
+		return zero, nil, fmt.Errorf("decode graphql response: %w", err)
 	}
 
 	if len(payload.Errors) > 0 {
@@ -519,8 +614,33 @@ func query[T any](ctx context.Context, httpClient *http.Client, endpoint string,
 		for _, gqlErr := range payload.Errors {
 			messages = append(messages, gqlErr.Message)
 		}
-		return zero, errors.New(strings.Join(messages, "; "))
+		return zero, nil, errors.New(strings.Join(messages, "; "))
 	}
 
-	return payload.Data, nil
+	return payload.Data, resp, nil
+}
+
+func refreshCookieName(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "microsoft":
+		return "microsoft-refresh-token"
+	case "github":
+		return "github-refresh-token"
+	case "guest":
+		return "guest-token"
+	default:
+		return ""
+	}
+}
+
+func extractRefreshToken(resp *http.Response, cookieName string) string {
+	if resp == nil {
+		return ""
+	}
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == cookieName {
+			return cookie.Value
+		}
+	}
+	return ""
 }

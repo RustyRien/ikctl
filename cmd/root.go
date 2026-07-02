@@ -5,7 +5,7 @@ import (
 	"os"
 
 	appcore "github.com/electrolux-oss/ik-tui/internal/app"
-	"github.com/electrolux-oss/ik-tui/internal/client"
+	"github.com/electrolux-oss/ik-tui/internal/auth"
 	"github.com/electrolux-oss/ik-tui/internal/config"
 	"github.com/electrolux-oss/ik-tui/internal/resource"
 	"github.com/spf13/cobra"
@@ -31,6 +31,8 @@ func init() {
 	rootCmd.AddCommand(getCmd())
 	rootCmd.AddCommand(describeCmd())
 	rootCmd.AddCommand(logCmd())
+	rootCmd.AddCommand(loginCmd())
+	rootCmd.AddCommand(logoutCmd())
 	rootCmd.AddCommand(enableCmd())
 	rootCmd.AddCommand(disableCmd())
 	rootCmd.AddCommand(deleteCmd())
@@ -49,6 +51,23 @@ func Execute() {
 	}
 }
 
+func persistConfig(cmd *cobra.Command, cfg *config.Config) {
+	endpointSet := cmd.Flags().Changed("endpoint") || isPersistentFlagSet(cmd, "endpoint")
+	tokenSet := cmd.Flags().Changed("token") || isPersistentFlagSet(cmd, "token")
+	if endpointSet || tokenSet {
+		_ = cfg.Save()
+	}
+}
+
+func isPersistentFlagSet(cmd *cobra.Command, name string) bool {
+	for c := cmd.Parent(); c != nil; c = c.Parent() {
+		if f := c.Flags().Lookup(name); f != nil && f.Changed {
+			return true
+		}
+	}
+	return false
+}
+
 func run(cmd *cobra.Command, _ []string) error {
 	flags.HasInsecureFlag = cmd.Flags().Changed("insecure-skip-tls-verify")
 	flags.HasNoColorsFlag = cmd.Flags().Changed("no-colors")
@@ -57,20 +76,25 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	persistConfig(cmd, &cfg)
+	cli, err := auth.NewClient(cfg)
+	if err != nil {
+		return err
+	}
 
 	activeEntity := "resources"
 	if len(cmd.Flags().Args()) > 0 {
-		registry := resource.DefaultRegistry(client.New(cfg))
+		registry := resource.DefaultRegistry(cli)
 		if descriptor, ok := registry.Resolve(cmd.Flags().Arg(0)); ok {
 			activeEntity = descriptor.Name
 		}
 	}
 
-	app := appcore.New(cfg, appcore.BuildInfo{
+	app := appcore.NewWithClient(cfg, appcore.BuildInfo{
 		Version: version,
 		Commit:  commit,
 		Date:    date,
-	}, activeEntity)
+	}, activeEntity, cli)
 
 	if err := app.Run(); err != nil {
 		return fmt.Errorf("run app: %w", err)

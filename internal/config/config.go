@@ -177,3 +177,33 @@ func parseSeconds(value string) (time.Duration, error) {
 	}
 	return seconds, nil
 }
+
+func (c *Config) Save() error {
+	if c.ConfigPath == "" {
+		return errors.New("cannot save: config path is empty")
+	}
+
+	dir := filepath.Dir(c.ConfigPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+
+	fileCfg := fileConfig{
+		Endpoint:           c.Endpoint,
+		Token:              c.Token,
+		RefreshSeconds:     c.RefreshSeconds,
+		InsecureSkipVerify: c.InsecureSkipVerify,
+		NoColors:           c.NoColors,
+	}
+
+	data, err := yaml.Marshal(fileCfg)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(c.ConfigPath, data, 0o600); err != nil {
+		return fmt.Errorf("write config file: %w", err)
+	}
+
+	return nil
+}

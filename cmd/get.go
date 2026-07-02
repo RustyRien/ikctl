@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/electrolux-oss/ik-tui/internal/client"
+	"github.com/electrolux-oss/ik-tui/internal/auth"
 	"github.com/electrolux-oss/ik-tui/internal/config"
 	"github.com/electrolux-oss/ik-tui/internal/printer"
 	"github.com/electrolux-oss/ik-tui/internal/resource"
@@ -59,8 +59,13 @@ func runGet(cmd *cobra.Command, args []string, options getOptions) error {
 	if err != nil {
 		return err
 	}
+	persistConfig(cmd, &cfg)
+	cli, err := auth.NewClient(cfg)
+	if err != nil {
+		return err
+	}
 
-	registry := resource.DefaultRegistry(client.New(cfg))
+	registry := resource.DefaultRegistry(cli)
 	descriptor, ok := registry.Resolve(args[0])
 	if !ok {
 		return fmt.Errorf("unknown entity %q (valid: %s)", args[0], strings.Join(registry.Names(), ", "))
