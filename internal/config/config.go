@@ -15,6 +15,7 @@ import (
 const (
 	defaultEndpoint        = "http://localhost:8000"
 	defaultRefreshInterval = 2 * time.Second
+	defaultSortOrder       = "desc"
 	configRelPath          = "ikctl/config.yaml"
 )
 
@@ -23,6 +24,9 @@ type Config struct {
 	Token              string        `yaml:"token"`
 	RefreshInterval    time.Duration `yaml:"-"`
 	RefreshSeconds     float64       `yaml:"refresh_seconds"`
+	AutoRefresh        bool          `yaml:"auto_refresh"`
+	DefaultSortOrder   string        `yaml:"default_sort_order"`
+	ShowBreadcrumbs    bool          `yaml:"show_breadcrumbs"`
 	InsecureSkipVerify bool          `yaml:"insecure_skip_tls_verify"`
 	NoColors           bool          `yaml:"no_colors"`
 	ConfigPath         string        `yaml:"-"`
@@ -32,6 +36,9 @@ type fileConfig struct {
 	Endpoint           string  `yaml:"endpoint"`
 	Token              string  `yaml:"token"`
 	RefreshSeconds     float64 `yaml:"refresh_seconds"`
+	AutoRefresh        *bool   `yaml:"auto_refresh,omitempty"`
+	DefaultSortOrder   string  `yaml:"default_sort_order,omitempty"`
+	ShowBreadcrumbs    *bool   `yaml:"show_breadcrumbs,omitempty"`
 	InsecureSkipVerify bool    `yaml:"insecure_skip_tls_verify"`
 	NoColors           bool    `yaml:"no_colors"`
 }
@@ -49,8 +56,11 @@ type FlagOverrides struct {
 
 func Load(flags FlagOverrides) (Config, error) {
 	cfg := Config{
-		Endpoint:        defaultEndpoint,
-		RefreshInterval: defaultRefreshInterval,
+		Endpoint:         defaultEndpoint,
+		RefreshInterval:  defaultRefreshInterval,
+		AutoRefresh:      true,
+		DefaultSortOrder: defaultSortOrder,
+		ShowBreadcrumbs:  true,
 	}
 
 	configPath, err := resolveConfigPath(flags.ConfigPath)
@@ -69,6 +79,9 @@ func Load(flags FlagOverrides) (Config, error) {
 
 	if cfg.Endpoint == "" {
 		return Config{}, errors.New("endpoint is required")
+	}
+	if cfg.DefaultSortOrder != "asc" && cfg.DefaultSortOrder != "desc" {
+		return Config{}, fmt.Errorf("default sort order must be asc or desc, got %q", cfg.DefaultSortOrder)
 	}
 
 	return cfg, nil
@@ -115,6 +128,15 @@ func loadFile(cfg *Config, path string) error {
 		cfg.RefreshSeconds = fileCfg.RefreshSeconds
 		cfg.RefreshInterval = time.Duration(fileCfg.RefreshSeconds * float64(time.Second))
 	}
+	if fileCfg.AutoRefresh != nil {
+		cfg.AutoRefresh = *fileCfg.AutoRefresh
+	}
+	if fileCfg.DefaultSortOrder != "" {
+		cfg.DefaultSortOrder = fileCfg.DefaultSortOrder
+	}
+	if fileCfg.ShowBreadcrumbs != nil {
+		cfg.ShowBreadcrumbs = *fileCfg.ShowBreadcrumbs
+	}
 	cfg.InsecureSkipVerify = fileCfg.InsecureSkipVerify
 	cfg.NoColors = fileCfg.NoColors
 
@@ -138,6 +160,15 @@ func applyEnv(cfg *Config) {
 	}
 	if value := os.Getenv("IK_NO_COLORS"); value != "" {
 		cfg.NoColors = strings.EqualFold(value, "true") || value == "1"
+	}
+	if value := os.Getenv("IK_AUTO_REFRESH"); value != "" {
+		cfg.AutoRefresh = strings.EqualFold(value, "true") || value == "1"
+	}
+	if value := os.Getenv("IK_DEFAULT_SORT_ORDER"); value != "" {
+		cfg.DefaultSortOrder = value
+	}
+	if value := os.Getenv("IK_SHOW_BREADCRUMBS"); value != "" {
+		cfg.ShowBreadcrumbs = strings.EqualFold(value, "true") || value == "1"
 	}
 }
 
@@ -165,6 +196,10 @@ func normalize(cfg *Config) {
 		cfg.RefreshInterval = defaultRefreshInterval
 	}
 	cfg.RefreshSeconds = cfg.RefreshInterval.Seconds()
+	cfg.DefaultSortOrder = strings.ToLower(strings.TrimSpace(cfg.DefaultSortOrder))
+	if cfg.DefaultSortOrder == "" {
+		cfg.DefaultSortOrder = defaultSortOrder
+	}
 	if cfg.ConfigPath != "" {
 		cfg.ConfigPath = filepath.Clean(cfg.ConfigPath)
 	}
@@ -192,6 +227,9 @@ func (c *Config) Save() error {
 		Endpoint:           c.Endpoint,
 		Token:              c.Token,
 		RefreshSeconds:     c.RefreshSeconds,
+		AutoRefresh:        &c.AutoRefresh,
+		DefaultSortOrder:   c.DefaultSortOrder,
+		ShowBreadcrumbs:    &c.ShowBreadcrumbs,
 		InsecureSkipVerify: c.InsecureSkipVerify,
 		NoColors:           c.NoColors,
 	}
@@ -206,4 +244,8 @@ func (c *Config) Save() error {
 	}
 
 	return nil
+}
+
+func (c Config) DefaultSortDescending() bool {
+	return c.DefaultSortOrder != "asc"
 }

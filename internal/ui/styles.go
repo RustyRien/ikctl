@@ -16,6 +16,9 @@ var (
 	colorKey       = tcell.ColorDodgerBlue
 	colorNumKey    = tcell.ColorFuchsia
 	colorTitleInfo = tcell.ColorAqua
+	colorCrumbFg   = tcell.ColorBlack
+	colorCrumbBg   = tcell.ColorAqua
+	colorCrumbLive = tcell.ColorOrange
 )
 
 func applyColors(enabled bool) {
@@ -33,6 +36,9 @@ func applyColors(enabled bool) {
 		colorKey = tcell.ColorDodgerBlue
 		colorNumKey = tcell.ColorFuchsia
 		colorTitleInfo = tcell.ColorAqua
+		colorCrumbFg = tcell.ColorBlack
+		colorCrumbBg = tcell.ColorAqua
+		colorCrumbLive = tcell.ColorOrange
 		return
 	}
 	colorHeader = tcell.ColorWhite
@@ -48,4 +54,7 @@ func applyColors(enabled bool) {
 	colorKey = tcell.ColorWhite
 	colorNumKey = tcell.ColorWhite
 	colorTitleInfo = tcell.ColorWhite
+	colorCrumbFg = tcell.ColorBlack
+	colorCrumbBg = tcell.ColorWhite
+	colorCrumbLive = tcell.ColorWhite
 }

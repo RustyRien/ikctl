@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"time"
 
@@ -28,9 +29,10 @@ type EntityModel struct {
 	lastError   error
 	sortField   string
 	sortDesc    bool
+	filter      map[string]any
 	pageSize    int
 	loadingMore bool
-	refreshFn   func(context.Context, []string, []int) ([]tabledata.Row, int, error)
+	refreshFn   func(context.Context, map[string]any, []string, []int) ([]tabledata.Row, int, error)
 	mx          sync.RWMutex
 }
 
@@ -42,8 +44,8 @@ func NewResourcesModel(client *client.Client) *EntityModel {
 		sortField: "created_at",
 		sortDesc:  true,
 		pageSize:  100,
-		refreshFn: func(ctx context.Context, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
-			result, err := client.Resources(ctx, nil, sort, pageRange)
+		refreshFn: func(ctx context.Context, filter map[string]any, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
+			result, err := client.Resources(ctx, filter, sort, pageRange)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -64,8 +66,8 @@ func NewTemplatesModel(client *client.Client) *EntityModel {
 		sortField: "updated_at",
 		sortDesc:  true,
 		pageSize:  100,
-		refreshFn: func(ctx context.Context, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
-			result, err := client.Templates(ctx, nil, sort, pageRange)
+		refreshFn: func(ctx context.Context, filter map[string]any, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
+			result, err := client.Templates(ctx, filter, sort, pageRange)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -86,8 +88,8 @@ func NewIntegrationsModel(client *client.Client) *EntityModel {
 		sortField: "updated_at",
 		sortDesc:  true,
 		pageSize:  100,
-		refreshFn: func(ctx context.Context, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
-			result, err := client.Integrations(ctx, nil, sort, pageRange)
+		refreshFn: func(ctx context.Context, filter map[string]any, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
+			result, err := client.Integrations(ctx, filter, sort, pageRange)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -101,11 +103,14 @@ func NewIntegrationsModel(client *client.Client) *EntityModel {
 }
 
 func NewModelFromDescriptor(kind EntityKind, descriptor *resource.Descriptor) *EntityModel {
+	return NewModelFromDescriptorWithSortOrder(kind, descriptor, true)
+}
+
+func NewModelFromDescriptorWithSortOrder(kind EntityKind, descriptor *resource.Descriptor, defaultDesc bool) *EntityModel {
 	sortField := ""
-	sortDesc := false
+	sortDesc := defaultDesc
 	if len(descriptor.DefaultSort) == 2 {
 		sortField = descriptor.DefaultSort[0]
-		sortDesc = descriptor.DefaultSort[1] == "DESC"
 	}
 	return &EntityModel{
 		kind:      kind,
@@ -113,8 +118,8 @@ func NewModelFromDescriptor(kind EntityKind, descriptor *resource.Descriptor) *E
 		sortField: sortField,
 		sortDesc:  sortDesc,
 		pageSize:  100,
-		refreshFn: func(ctx context.Context, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
-			rows, _, total, err := descriptor.List(ctx, nil, sort, pageRange)
+		refreshFn: func(ctx context.Context, filter map[string]any, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
+			rows, _, total, err := descriptor.List(ctx, filter, sort, pageRange)
 			return rows, total, err
 		},
 	}
@@ -127,6 +132,7 @@ func (m *EntityModel) Kind() EntityKind {
 func (m *EntityModel) Refresh(ctx context.Context) error {
 	m.mx.RLock()
 	sort := currentSort(m.sortField, m.sortDesc)
+	filter := cloneFilter(m.filter)
 	loaded := len(m.rows)
 	pageSize := m.pageSize
 	m.mx.RUnlock()
@@ -134,7 +140,7 @@ func (m *EntityModel) Refresh(ctx context.Context) error {
 		loaded = pageSize
 	}
 
-	rows, total, err := m.refreshFn(ctx, sort, pageRange(0, loaded))
+	rows, total, err := m.refreshFn(ctx, filter, sort, pageRange(0, loaded))
 
 	m.mx.Lock()
 	defer m.mx.Unlock()
@@ -161,11 +167,12 @@ func (m *EntityModel) LoadMore(ctx context.Context) error {
 	}
 	m.loadingMore = true
 	sort := currentSort(m.sortField, m.sortDesc)
+	filter := cloneFilter(m.filter)
 	offset := len(m.rows)
 	limit := m.pageSize
 	m.mx.Unlock()
 
-	rows, total, err := m.refreshFn(ctx, sort, pageRange(offset, offset+limit))
+	rows, total, err := m.refreshFn(ctx, filter, sort, pageRange(offset, offset+limit))
 
 	m.mx.Lock()
 	defer m.mx.Unlock()
@@ -210,10 +217,41 @@ func (m *EntityModel) SetSortByColumn(column int, asc bool) bool {
 	return true
 }
 
+func (m *EntityModel) SetDefaultSortDescending(desc bool) {
+	m.mx.Lock()
+	defer m.mx.Unlock()
+	m.sortDesc = desc
+}
+
 func (m *EntityModel) HasMore() bool {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 	return m.total == 0 || len(m.rows) < m.total
+}
+
+func (m *EntityModel) SetFilter(filter map[string]any) bool {
+	cloned := cloneFilter(filter)
+
+	m.mx.Lock()
+	defer m.mx.Unlock()
+
+	if reflect.DeepEqual(m.filter, cloned) {
+		return false
+	}
+
+	m.filter = cloned
+	m.rows = nil
+	m.total = 0
+	m.lastUpdated = time.Time{}
+	m.lastError = nil
+	m.loadingMore = false
+	return true
+}
+
+func (m *EntityModel) Filter() map[string]any {
+	m.mx.RLock()
+	defer m.mx.RUnlock()
+	return cloneFilter(m.filter)
 }
 
 func (m *EntityModel) LoadingMore() bool {
@@ -247,4 +285,15 @@ func (m *EntityModel) Snapshot() ([]tabledata.Header, []tabledata.Row, int, time
 	headers := append([]tabledata.Header(nil), m.headers...)
 	rows := append([]tabledata.Row(nil), m.rows...)
 	return headers, rows, m.total, m.lastUpdated, m.lastError
+}
+
+func cloneFilter(filter map[string]any) map[string]any {
+	if len(filter) == 0 {
+		return nil
+	}
+	cloned := make(map[string]any, len(filter))
+	for key, value := range filter {
+		cloned[key] = value
+	}
+	return cloned
 }

@@ -17,6 +17,7 @@ import (
 	uiapp "github.com/electrolux-oss/ik-tui/internal/ui"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/sahilm/fuzzy"
 )
 
 type BuildInfo struct {
@@ -26,6 +27,11 @@ type BuildInfo struct {
 }
 
 type overlayTemplateJump struct {
+	ID   string
+	Name string
+}
+
+type templateDetailSelection struct {
 	ID   string
 	Name string
 }
@@ -43,21 +49,39 @@ type auditLogSelection struct {
 var logLevelPrefixRX = regexp.MustCompile(`(?i)^\[(trace|debug|info|warn|warning|error|fatal)\]\s*`)
 
 type App struct {
-	config              config.Config
-	build               BuildInfo
-	client              *client.Client
-	models              map[model.EntityKind]*model.EntityModel
-	registry            *resource.Registry
-	kindByName          map[string]model.EntityKind
-	nameByKind          map[model.EntityKind]string
-	activeKind          model.EntityKind
-	ui                  *uiapp.App
-	manualKick          chan struct{}
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	overlayTemplateJump *overlayTemplateJump
-	auditLogRows        []tabledata.Row
-	auditLogTable       *tview.Table
+	config                    config.Config
+	build                     BuildInfo
+	client                    *client.Client
+	models                    map[model.EntityKind]*model.EntityModel
+	registry                  *resource.Registry
+	kindByName                map[string]model.EntityKind
+	nameByKind                map[model.EntityKind]string
+	activeKind                model.EntityKind
+	ui                        *uiapp.App
+	manualKick                chan struct{}
+	settingsChanged           chan struct{}
+	ctx                       context.Context
+	cancel                    context.CancelFunc
+	overlayTemplateJump       *overlayTemplateJump
+	auditLogRows              []tabledata.Row
+	auditLogTable             *tview.Table
+	entitySelectorTable       *tview.Table
+	settingsTable             *tview.Table
+	templateTree              *tview.TreeView
+	templateFilterAllRows     []client.Template
+	templateFilterRows        []client.Template
+	templateFilterTable       *tview.Table
+	templateFilterQuery       string
+	templateFilterMode        bool
+	integrationFilterAllRows  []client.Integration
+	integrationFilterRows     []client.Integration
+	integrationFilterTable    *tview.Table
+	integrationFilterQuery    string
+	integrationFilterMode     bool
+	resourceTemplateFilter    *client.Template
+	resourceIntegrationFilter *client.Integration
+	hideDestroyedResources    bool
+	activeTemplateDetail      *templateDetailSelection
 }
 
 func New(cfg config.Config, build BuildInfo, activeEntity string) *App {
@@ -71,24 +95,25 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	registry := resource.DefaultRegistry(cli)
 
 	app := &App{
-		config:     cfg,
-		build:      build,
-		client:     cli,
-		models:     map[model.EntityKind]*model.EntityModel{},
-		registry:   registry,
-		kindByName: map[string]model.EntityKind{},
-		nameByKind: map[model.EntityKind]string{},
-		activeKind: model.EntityResources,
-		ui:         ui,
-		manualKick: make(chan struct{}, 1),
-		ctx:        ctx,
-		cancel:     cancel,
+		config:          cfg,
+		build:           build,
+		client:          cli,
+		models:          map[model.EntityKind]*model.EntityModel{},
+		registry:        registry,
+		kindByName:      map[string]model.EntityKind{},
+		nameByKind:      map[model.EntityKind]string{},
+		activeKind:      model.EntityResources,
+		ui:              ui,
+		manualKick:      make(chan struct{}, 1),
+		settingsChanged: make(chan struct{}, 1),
+		ctx:             ctx,
+		cancel:          cancel,
 	}
 
 	ordered := registry.Ordered()
 	for index, descriptor := range ordered {
 		kind := model.EntityKind(descriptor.Name)
-		app.models[kind] = model.NewModelFromDescriptor(kind, descriptor)
+		app.models[kind] = model.NewModelFromDescriptorWithSortOrder(kind, descriptor, cfg.DefaultSortDescending())
 		app.kindByName[descriptor.Name] = kind
 		app.nameByKind[kind] = descriptor.Name
 		if index == 0 {
@@ -106,9 +131,14 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetNavFunc(app.handleNav)
 	ui.SetSortFunc(app.handleSort)
 	ui.SetLoadMoreFunc(app.requestLoadMore)
+	ui.SetTemplateFilterFunc(app.openTemplateFilter)
+	ui.SetIntegrationFilterFunc(app.openIntegrationFilter)
+	ui.SetToggleDestroyedFunc(app.toggleHideDestroyedResources)
+	ui.SetEntitySelectorFunc(app.openEntitySelector)
+	ui.SetSettingsFunc(app.openSettings)
 	ui.SetOverlayKeyFunc(app.handleOverlayKey)
 	ui.SetDetailKeyFunc(app.handleOverlayKey)
-	ui.SetEntityTitle(entityTitle(app.activeKind), entityEmptyLabel(app.activeKind))
+	ui.SetEntityTitle(app.currentEntityTitle(), entityEmptyLabel(app.activeKind))
 
 	return app
 }
@@ -122,17 +152,32 @@ func (a *App) Run() error {
 }
 
 func (a *App) loop() {
-	ticker := time.NewTicker(a.config.RefreshInterval)
-	defer ticker.Stop()
+	refreshInterval := a.config.RefreshInterval
+	autoRefresh := a.config.AutoRefresh
+	timer := time.NewTimer(refreshInterval)
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-a.ctx.Done():
 			return
-		case <-ticker.C:
-			a.refresh()
+		case <-timer.C:
+			if autoRefresh {
+				a.refresh()
+			}
+			timer.Reset(refreshInterval)
 		case <-a.manualKick:
 			a.refresh()
+		case <-a.settingsChanged:
+			refreshInterval = a.config.RefreshInterval
+			autoRefresh = a.config.AutoRefresh
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(refreshInterval)
 		}
 	}
 }
@@ -145,15 +190,22 @@ func (a *App) requestRefresh() {
 }
 
 func (a *App) loadCurrentUser() {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
 
-	user, err := a.client.CurrentUser(ctx)
-	if err != nil || user == nil {
-		return
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
 
-	a.ui.SetHeaderUser(user.Identifier, user.DisplayName, user.Email)
+		user, err := a.client.CurrentUser(ctx)
+		if err != nil || user == nil {
+			return
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.ui.SetHeaderUser(user.Identifier, user.DisplayName, user.Email)
+		})
+	}()
 }
 
 func (a *App) requestLoadMore() {
@@ -163,6 +215,9 @@ func (a *App) requestLoadMore() {
 	}
 
 	go func(kind model.EntityKind, m *model.EntityModel) {
+		done := a.ui.BeginLoading()
+		defer done()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
@@ -177,6 +232,9 @@ func (a *App) requestLoadMore() {
 }
 
 func (a *App) refresh() {
+	done := a.ui.BeginLoading()
+	defer done()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
@@ -185,26 +243,33 @@ func (a *App) refresh() {
 	headers, rows, total, lastUpdated, lastErr := model.Snapshot()
 	sortColumn, sortAsc := model.SortState()
 	a.ui.Application().QueueUpdateDraw(func() {
-		a.ui.SetEntityTitle(entityTitle(a.activeKind), entityEmptyLabel(a.activeKind))
+		a.ui.SetEntityTitle(a.currentEntityTitle(), entityEmptyLabel(a.activeKind))
 		a.ui.Update(headers, rows, len(rows), total, lastUpdated, lastErr)
 		a.ui.SetSortState(sortColumn, sortAsc)
 	})
 }
 
 func (a *App) refreshInitial() {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
 
-	model := a.currentModel()
-	_ = model.Refresh(ctx)
-	a.renderCurrentModel()
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+
+		model := a.currentModel()
+		_ = model.Refresh(ctx)
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.renderCurrentModel()
+		})
+	}()
 }
 
 func (a *App) renderCurrentModel() {
 	model := a.currentModel()
 	headers, rows, total, lastUpdated, lastErr := model.Snapshot()
 	sortColumn, sortAsc := model.SortState()
-	a.ui.SetEntityTitle(entityTitle(a.activeKind), entityEmptyLabel(a.activeKind))
+	a.ui.SetEntityTitle(a.currentEntityTitle(), entityEmptyLabel(a.activeKind))
 	a.ui.Update(headers, rows, len(rows), total, lastUpdated, lastErr)
 	a.ui.SetSortState(sortColumn, sortAsc)
 }
@@ -236,7 +301,22 @@ func (a *App) handleNav(key rune) {
 	a.overlayTemplateJump = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
+	a.entitySelectorTable = nil
+	a.settingsTable = nil
+	a.templateFilterAllRows = nil
+	a.templateFilterRows = nil
+	a.templateFilterTable = nil
+	a.templateFilterQuery = ""
+	a.templateFilterMode = false
+	a.integrationFilterAllRows = nil
+	a.integrationFilterRows = nil
+	a.integrationFilterTable = nil
+	a.integrationFilterQuery = ""
+	a.integrationFilterMode = false
+	a.activeTemplateDetail = nil
+	a.templateTree = nil
 	a.ui.CloseOverlay()
+	a.ui.ResetHeaderHotkeys()
 	a.renderCurrentModel()
 	a.requestRefresh()
 }
@@ -246,6 +326,375 @@ func (a *App) handleSort(column int, asc bool) {
 		return
 	}
 	a.requestRefresh()
+}
+
+func (a *App) toggleHideDestroyedResources() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+	a.hideDestroyedResources = !a.hideDestroyedResources
+	a.applyResourceFilters()
+}
+
+func (a *App) openTemplateFilter() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+
+	selectedTemplateID := ""
+	if a.resourceTemplateFilter != nil {
+		selectedTemplateID = a.resourceTemplateFilter.ID
+	}
+	a.resetResourceFilterOverlays()
+
+	a.ui.OpenOverlay("Resource Template Filter", "Loading templates...")
+
+	go func(selectedID string) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		result, err := a.client.Templates(ctx, nil, []string{"name", "ASC"}, []int{0, 200})
+		var primitive tview.Primitive
+		var templates []client.Template
+		var table *tview.Table
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load templates.\n\n%v", err))
+		} else {
+			templates = result.Items
+			primitive, table = templateFilterView(result.Items, len(result.Items), result.Total, selectedID, "", false)
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.templateFilterAllRows = templates
+			a.templateFilterRows = templates
+			a.templateFilterTable = table
+			a.ui.OpenOverlayPrimitive("Resource Template Filter", primitive)
+		})
+	}(selectedTemplateID)
+}
+
+func (a *App) openIntegrationFilter() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+
+	selectedIntegrationID := ""
+	if a.resourceIntegrationFilter != nil {
+		selectedIntegrationID = a.resourceIntegrationFilter.ID
+	}
+	a.resetResourceFilterOverlays()
+
+	a.ui.OpenOverlay("Resource Integration Filter", "Loading integrations...")
+
+	go func(selectedID string) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		result, err := a.client.Integrations(ctx, map[string]any{"integration_type": "cloud"}, []string{"name", "ASC"}, []int{0, 200})
+		var primitive tview.Primitive
+		var integrations []client.Integration
+		var table *tview.Table
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load integrations.\n\n%v", err))
+		} else {
+			integrations = result.Items
+			primitive, table = integrationFilterView(result.Items, len(result.Items), result.Total, selectedID, "", false)
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.integrationFilterAllRows = integrations
+			a.integrationFilterRows = integrations
+			a.integrationFilterTable = table
+			a.ui.OpenOverlayPrimitive("Resource Integration Filter", primitive)
+		})
+	}(selectedIntegrationID)
+}
+
+func (a *App) renderTemplateFilterOverlay() {
+	selectedID := ""
+	if a.resourceTemplateFilter != nil {
+		selectedID = a.resourceTemplateFilter.ID
+	}
+
+	filtered := filterTemplates(a.templateFilterAllRows, a.templateFilterQuery)
+	primitive, table := templateFilterView(filtered, len(filtered), len(a.templateFilterAllRows), selectedID, a.templateFilterQuery, a.templateFilterMode)
+	a.templateFilterRows = filtered
+	a.templateFilterTable = table
+	a.ui.OpenOverlayPrimitive("Resource Template Filter", primitive)
+}
+
+func (a *App) renderIntegrationFilterOverlay() {
+	selectedID := ""
+	if a.resourceIntegrationFilter != nil {
+		selectedID = a.resourceIntegrationFilter.ID
+	}
+
+	filtered := filterIntegrations(a.integrationFilterAllRows, a.integrationFilterQuery)
+	primitive, table := integrationFilterView(filtered, len(filtered), len(a.integrationFilterAllRows), selectedID, a.integrationFilterQuery, a.integrationFilterMode)
+	a.integrationFilterRows = filtered
+	a.integrationFilterTable = table
+	a.ui.OpenOverlayPrimitive("Resource Integration Filter", primitive)
+}
+
+func (a *App) openEntitySelector() {
+	a.auditLogRows = nil
+	a.auditLogTable = nil
+	a.settingsTable = nil
+	a.templateFilterAllRows = nil
+	a.templateFilterRows = nil
+	a.templateFilterTable = nil
+	a.templateFilterQuery = ""
+	a.templateFilterMode = false
+	a.integrationFilterAllRows = nil
+	a.integrationFilterRows = nil
+	a.integrationFilterTable = nil
+	a.integrationFilterQuery = ""
+	a.integrationFilterMode = false
+
+	primitive, table := entitySelectorView(a.activeKind)
+	a.entitySelectorTable = table
+	a.ui.OpenOverlayPrimitive("Entity Selector", primitive)
+}
+
+func (a *App) openSettings() {
+	a.auditLogRows = nil
+	a.auditLogTable = nil
+	a.entitySelectorTable = nil
+	a.templateFilterAllRows = nil
+	a.templateFilterRows = nil
+	a.templateFilterTable = nil
+	a.templateFilterQuery = ""
+	a.templateFilterMode = false
+	a.integrationFilterAllRows = nil
+	a.integrationFilterRows = nil
+	a.integrationFilterTable = nil
+	a.integrationFilterQuery = ""
+	a.integrationFilterMode = false
+
+	primitive, table := settingsView(a.config.AutoRefresh, a.config.DefaultSortOrder, a.config.RefreshSeconds, a.config.ShowBreadcrumbs)
+	a.settingsTable = table
+	a.ui.OpenOverlayPrimitive("Settings", primitive)
+}
+
+func (a *App) applySelectedSetting() {
+	if a.settingsTable == nil {
+		return
+	}
+
+	selectedRow, _ := a.settingsTable.GetSelection()
+	switch selectedRow {
+	case 1:
+		a.toggleAutoRefresh()
+	case 2:
+		a.toggleBreadcrumbs()
+	case 3:
+		a.toggleDefaultSortOrder()
+	case 4:
+		a.adjustRefreshInterval(1)
+	}
+}
+
+func (a *App) toggleAutoRefresh() {
+	a.config.AutoRefresh = !a.config.AutoRefresh
+	_ = a.config.Save()
+	a.notifySettingsChanged()
+	a.renderSettingsOverlay(1)
+}
+
+func (a *App) toggleDefaultSortOrder() {
+	if a.config.DefaultSortDescending() {
+		a.config.DefaultSortOrder = "asc"
+	} else {
+		a.config.DefaultSortOrder = "desc"
+	}
+	_ = a.config.Save()
+
+	for _, entityModel := range a.models {
+		entityModel.SetDefaultSortDescending(a.config.DefaultSortDescending())
+	}
+
+	a.notifySettingsChanged()
+	a.renderSettingsOverlay(3)
+	a.requestRefresh()
+}
+
+func (a *App) toggleBreadcrumbs() {
+	a.config.ShowBreadcrumbs = !a.config.ShowBreadcrumbs
+	_ = a.config.Save()
+	a.ui.SetBreadcrumbsVisible(a.config.ShowBreadcrumbs)
+	a.notifySettingsChanged()
+	a.renderSettingsOverlay(2)
+}
+
+func (a *App) adjustRefreshInterval(delta float64) {
+	next := a.config.RefreshSeconds + delta
+	if next < 1 {
+		next = 1
+	}
+	a.config.RefreshSeconds = next
+	a.config.RefreshInterval = time.Duration(next * float64(time.Second))
+	_ = a.config.Save()
+	a.notifySettingsChanged()
+	a.renderSettingsOverlay(4)
+}
+
+func (a *App) renderSettingsOverlay(selectedRow int) {
+	primitive, table := settingsView(a.config.AutoRefresh, a.config.DefaultSortOrder, a.config.RefreshSeconds, a.config.ShowBreadcrumbs)
+	if selectedRow >= 1 && selectedRow <= 4 {
+		table.Select(selectedRow, 0)
+	}
+	a.settingsTable = table
+	a.ui.OpenOverlayPrimitive("Settings", primitive)
+}
+
+func (a *App) notifySettingsChanged() {
+	select {
+	case a.settingsChanged <- struct{}{}:
+	default:
+	}
+}
+
+func (a *App) applySelectedEntity() {
+	if a.entitySelectorTable == nil {
+		return
+	}
+
+	selectedRow, _ := a.entitySelectorTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+
+	var key rune
+	switch selectedRow {
+	case 1:
+		key = 'r'
+	case 2:
+		key = 't'
+	case 3:
+		key = 'i'
+	default:
+		return
+	}
+
+	a.entitySelectorTable = nil
+	a.ui.CloseOverlay()
+	a.handleNav(key)
+}
+
+func (a *App) applySelectedTemplateFilter() {
+	if a.templateFilterTable == nil {
+		return
+	}
+
+	selectedRow, _ := a.templateFilterTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+
+	if selectedRow == 1 {
+		a.clearTemplateFilter()
+		return
+	}
+
+	index := selectedRow - 2
+	if index < 0 || index >= len(a.templateFilterRows) {
+		return
+	}
+
+	template := a.templateFilterRows[index]
+	a.resourceTemplateFilter = &template
+	a.applyResourceFilters()
+}
+
+func (a *App) clearTemplateFilter() {
+	a.resourceTemplateFilter = nil
+	a.applyResourceFilters()
+}
+
+func (a *App) applySelectedIntegrationFilter() {
+	if a.integrationFilterTable == nil {
+		return
+	}
+
+	selectedRow, _ := a.integrationFilterTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+
+	if selectedRow == 1 {
+		a.clearIntegrationFilter()
+		return
+	}
+
+	index := selectedRow - 2
+	if index < 0 || index >= len(a.integrationFilterRows) {
+		return
+	}
+
+	integration := a.integrationFilterRows[index]
+	a.resourceIntegrationFilter = &integration
+	a.applyResourceFilters()
+}
+
+func (a *App) clearIntegrationFilter() {
+	a.resourceIntegrationFilter = nil
+	a.applyResourceFilters()
+}
+
+func (a *App) applyResourceFilters() {
+	a.entitySelectorTable = nil
+	a.settingsTable = nil
+	a.resetResourceFilterOverlays()
+	a.ui.CloseOverlay()
+
+	resourcesModel := a.models[model.EntityResources]
+	if resourcesModel == nil {
+		return
+	}
+	filter := a.resourceFilters()
+	if !resourcesModel.SetFilter(filter) {
+		a.renderCurrentModel()
+		return
+	}
+
+	a.renderCurrentModel()
+	a.requestRefresh()
+}
+
+func (a *App) resetResourceFilterOverlays() {
+	a.templateFilterAllRows = nil
+	a.templateFilterRows = nil
+	a.templateFilterTable = nil
+	a.templateFilterQuery = ""
+	a.templateFilterMode = false
+	a.integrationFilterAllRows = nil
+	a.integrationFilterRows = nil
+	a.integrationFilterTable = nil
+	a.integrationFilterQuery = ""
+	a.integrationFilterMode = false
+}
+
+func (a *App) resourceFilters() map[string]any {
+	filter := map[string]any{}
+	if a.resourceTemplateFilter != nil {
+		filter["template_id"] = a.resourceTemplateFilter.ID
+	}
+	if a.resourceIntegrationFilter != nil {
+		filter["integration_ids__any"] = []string{a.resourceIntegrationFilter.ID}
+	}
+	if a.hideDestroyedResources {
+		filter["state__in"] = []string{"provision", "provisioned", "update"}
+	}
+	if len(filter) == 0 {
+		return nil
+	}
+	return filter
 }
 
 func (a *App) openOverview(row tabledata.Row) {
@@ -262,11 +711,15 @@ func (a *App) openOverview(row tabledata.Row) {
 func (a *App) openResourceOverview(resource client.Resource) {
 	title := fmt.Sprintf("Resource: %s", resource.Name)
 	a.overlayTemplateJump = nil
+	a.activeTemplateDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading resource overview...")
 
 	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
+
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
@@ -294,11 +747,16 @@ func (a *App) openResourceOverview(resource client.Resource) {
 func (a *App) openTemplateOverview(id string, name string) {
 	title := fmt.Sprintf("Template: %s", name)
 	a.overlayTemplateJump = nil
+	a.activeTemplateDetail = &templateDetailSelection{ID: id, Name: name}
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading template overview...")
+	a.ui.SetTemplateOverviewHotkeys()
 
 	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
+
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
@@ -307,13 +765,16 @@ func (a *App) openTemplateOverview(id string, name string) {
 		if err != nil {
 			primitive = errorView(fmt.Sprintf("Failed to load template overview.\n\n%v", err))
 		} else if full != nil {
+			a.activeTemplateDetail = &templateDetailSelection{ID: full.ID, Name: full.Name}
 			primitive = templateOverviewView(*full)
 		} else {
+			a.activeTemplateDetail = nil
 			primitive = errorView("Template not found")
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
 			a.ui.OpenDetailPrimitive(title, primitive)
+			a.ui.SetTemplateOverviewHotkeys()
 		})
 	}()
 }
@@ -321,11 +782,15 @@ func (a *App) openTemplateOverview(id string, name string) {
 func (a *App) openIntegrationOverview(id string, name string) {
 	title := fmt.Sprintf("Integration: %s", name)
 	a.overlayTemplateJump = nil
+	a.activeTemplateDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading integration overview...")
 
 	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
+
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
@@ -346,6 +811,213 @@ func (a *App) openIntegrationOverview(id string, name string) {
 }
 
 func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
+	if a.settingsTable != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedSetting()
+			return true
+		case tcell.KeyEsc:
+			a.settingsTable = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case ' ', 't':
+				if row, _ := a.settingsTable.GetSelection(); row == 1 {
+					a.toggleAutoRefresh()
+					return true
+				}
+				if row, _ := a.settingsTable.GetSelection(); row == 2 {
+					a.toggleBreadcrumbs()
+					return true
+				}
+				return true
+			case 'd':
+				a.toggleDefaultSortOrder()
+				return true
+			case '+', '=':
+				if row, _ := a.settingsTable.GetSelection(); row == 4 {
+					a.adjustRefreshInterval(1)
+					return true
+				}
+			case '-':
+				if row, _ := a.settingsTable.GetSelection(); row == 4 {
+					a.adjustRefreshInterval(-1)
+					return true
+				}
+			case 'q':
+				a.settingsTable = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.templateTree != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.openSelectedTemplateTreeNode()
+			return true
+		case tcell.KeyEsc:
+			a.templateTree = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'q':
+				a.templateTree = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.entitySelectorTable != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedEntity()
+			return true
+		case tcell.KeyEsc:
+			a.entitySelectorTable = nil
+			a.templateTree = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'q':
+				a.entitySelectorTable = nil
+				return false
+			case 'r', 't', 'i':
+				a.entitySelectorTable = nil
+				a.ui.CloseOverlay()
+				a.handleNav(event.Rune())
+				return true
+			}
+		}
+		return false
+	}
+
+	if a.integrationFilterTable != nil {
+		if a.integrationFilterMode {
+			switch event.Key() {
+			case tcell.KeyEsc:
+				a.integrationFilterMode = false
+				a.renderIntegrationFilterOverlay()
+				return true
+			case tcell.KeyBackspace, tcell.KeyBackspace2:
+				a.integrationFilterQuery = trimLastRune(a.integrationFilterQuery)
+				a.renderIntegrationFilterOverlay()
+				return true
+			case tcell.KeyEnter:
+				a.applySelectedIntegrationFilter()
+				return true
+			case tcell.KeyRune:
+				if event.Rune() != '/' {
+					a.integrationFilterQuery += string(event.Rune())
+					a.renderIntegrationFilterOverlay()
+				}
+				return true
+			}
+		}
+
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedIntegrationFilter()
+			return true
+		case tcell.KeyEsc:
+			a.integrationFilterAllRows = nil
+			a.integrationFilterRows = nil
+			a.integrationFilterTable = nil
+			a.integrationFilterQuery = ""
+			a.integrationFilterMode = false
+			a.templateTree = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '/':
+				a.integrationFilterMode = true
+				a.renderIntegrationFilterOverlay()
+				return true
+			case 'c':
+				a.clearIntegrationFilter()
+				return true
+			case 'q':
+				a.integrationFilterAllRows = nil
+				a.integrationFilterRows = nil
+				a.integrationFilterTable = nil
+				a.integrationFilterQuery = ""
+				a.integrationFilterMode = false
+				a.templateTree = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.templateFilterTable != nil {
+		if a.templateFilterMode {
+			switch event.Key() {
+			case tcell.KeyEsc:
+				a.templateFilterMode = false
+				a.renderTemplateFilterOverlay()
+				return true
+			case tcell.KeyBackspace, tcell.KeyBackspace2:
+				a.templateFilterQuery = trimLastRune(a.templateFilterQuery)
+				a.renderTemplateFilterOverlay()
+				return true
+			case tcell.KeyEnter:
+				a.applySelectedTemplateFilter()
+				return true
+			case tcell.KeyRune:
+				if event.Rune() != '/' {
+					a.templateFilterQuery += string(event.Rune())
+					a.renderTemplateFilterOverlay()
+				}
+				return true
+			}
+		}
+
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedTemplateFilter()
+			return true
+		case tcell.KeyEsc:
+			a.templateFilterAllRows = nil
+			a.templateFilterRows = nil
+			a.templateFilterTable = nil
+			a.templateFilterQuery = ""
+			a.templateFilterMode = false
+			a.templateTree = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '/':
+				a.templateFilterMode = true
+				a.renderTemplateFilterOverlay()
+				return true
+			case 'c':
+				a.clearTemplateFilter()
+				return true
+			case 'q':
+				a.templateFilterAllRows = nil
+				a.templateFilterRows = nil
+				a.templateFilterTable = nil
+				a.templateFilterQuery = ""
+				a.templateFilterMode = false
+				a.templateTree = nil
+				return false
+			}
+		}
+		return false
+	}
+
 	if a.auditLogRows != nil {
 		switch event.Key() {
 		case tcell.KeyEnter:
@@ -359,6 +1031,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.auditLogRows = nil
 				a.auditLogTable = nil
+				a.templateTree = nil
 				return false
 			}
 		}
@@ -368,6 +1041,10 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 	if event.Key() != tcell.KeyRune {
 		return false
 	}
+	if event.Rune() == 't' && a.activeTemplateDetail != nil {
+		a.openTemplateTree(a.activeTemplateDetail.ID, valueOr(a.activeTemplateDetail.Name, a.activeTemplateDetail.ID))
+		return true
+	}
 	if event.Rune() != 't' || a.overlayTemplateJump == nil {
 		return false
 	}
@@ -375,6 +1052,56 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 	jump := a.overlayTemplateJump
 	a.openTemplateOverview(jump.ID, valueOr(jump.Name, jump.ID))
 	return true
+}
+
+func (a *App) openTemplateTree(id string, name string) {
+	title := fmt.Sprintf("Template Tree: %s", name)
+	a.auditLogRows = nil
+	a.auditLogTable = nil
+	a.templateTree = nil
+	a.ui.OpenOverlay(title, "Loading template tree...")
+
+	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		tree, err := a.client.TemplateTree(ctx, id, "children")
+		var primitive tview.Primitive
+		var treeView *tview.TreeView
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load template tree.\n\n%v", err))
+		} else if tree != nil {
+			primitive, treeView = templateTreeView(*tree)
+		} else {
+			primitive = errorView("Template tree not found")
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.templateTree = treeView
+			a.ui.OpenOverlayPrimitive(title, primitive)
+		})
+	}()
+}
+
+func (a *App) openSelectedTemplateTreeNode() {
+	if a.templateTree == nil {
+		return
+	}
+	node := a.templateTree.GetCurrentNode()
+	if node == nil {
+		return
+	}
+	reference := node.GetReference()
+	selection, ok := reference.(client.TemplateTreeNode)
+	if !ok || selection.ID == "" {
+		return
+	}
+	a.templateTree = nil
+	a.ui.CloseOverlay()
+	a.openTemplateOverview(selection.ID, valueOr(selection.Name, selection.ID))
 }
 
 func (a *App) openLogs(row tabledata.Row) {
@@ -395,6 +1122,9 @@ func (a *App) openLogs(row tabledata.Row) {
 	a.ui.OpenDetail(title, "Loading resource logs...")
 
 	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
+
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
@@ -426,6 +1156,9 @@ func (a *App) openAuditLogs(row tabledata.Row) {
 	a.ui.SetAuditHeaderHotkeys()
 
 	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
+
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
@@ -479,6 +1212,9 @@ func (a *App) openAuditLogDetail(selection auditLogSelection) {
 	a.ui.SetAuditDetailHeaderHotkeys()
 
 	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
+
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
@@ -642,8 +1378,24 @@ func templateOverviewView(template client.Template) tview.Primitive {
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(summary, 7, 0, true)
 	root.AddItem(description, 0, 1, false)
-	root.AddItem(overviewFooter("Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("t tree view  Esc/q close"), 1, 0, false)
 	return root
+}
+
+func templateTreeView(tree client.TemplateTreeNode) (tview.Primitive, *tview.TreeView) {
+	view := tview.NewTreeView()
+	view.SetBorder(true)
+	view.SetTitle("Tree View")
+	root := buildTemplateTreeNode(tree)
+	root.SetExpanded(true)
+	expandTemplateTree(root)
+	view.SetRoot(root)
+	view.SetCurrentNode(root)
+
+	container := tview.NewFlex().SetDirection(tview.FlexRow)
+	container.AddItem(view, 0, 1, true)
+	container.AddItem(overviewFooter("Enter open template  Esc/q close"), 1, 0, false)
+	return container, view
 }
 
 func integrationOverviewView(integration client.Integration) tview.Primitive {
@@ -731,6 +1483,262 @@ func overviewFooter(text string) tview.Primitive {
 	return view
 }
 
+func templateFilterView(templates []client.Template, shown int, total int, selectedID string, query string, filterMode bool) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Templates")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"TEMPLATE", "CLOUD TYPES", "UPDATED"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	selectedRow := 1
+	allLabel := "All templates"
+	if selectedID == "" {
+		allLabel = allLabel + "  [active]"
+	}
+	table.SetCell(1, 0, tview.NewTableCell(allLabel).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 2, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+
+	for rowIndex, template := range templates {
+		name := template.Name
+		if template.ID == selectedID {
+			name = name + "  [active]"
+			selectedRow = rowIndex + 2
+		}
+		cloudTypes := strings.Join(orSlice(template.CloudResourceTypes, []string{"-"}), ", ")
+		fields := []string{name, cloudTypes, template.UpdatedAt.Format(time.RFC3339)}
+		for col, field := range fields {
+			table.SetCell(rowIndex+2, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+
+	table.Select(selectedRow, 0)
+
+	footerText := fmt.Sprintf("Showing %d of %d templates  / filter  Enter apply  c clear  Esc/q close", shown, total)
+	if query != "" {
+		footerText += fmt.Sprintf("  Filter: %s", query)
+	}
+	if filterMode {
+		footerText += "  typing..."
+	}
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter(footerText), 1, 0, false)
+	return root, table
+}
+
+func integrationFilterView(integrations []client.Integration, shown int, total int, selectedID string, query string, filterMode bool) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Integrations")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"INTEGRATION", "PROVIDER", "TYPE", "UPDATED"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	selectedRow := 1
+	allLabel := "All integrations"
+	if selectedID == "" {
+		allLabel = allLabel + "  [active]"
+	}
+	table.SetCell(1, 0, tview.NewTableCell(allLabel).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 2, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 3, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+
+	for rowIndex, integration := range integrations {
+		name := integration.Name
+		if integration.ID == selectedID {
+			name = name + "  [active]"
+			selectedRow = rowIndex + 2
+		}
+		fields := []string{
+			name,
+			blankDash(integration.IntegrationProvider),
+			blankDash(integration.IntegrationType),
+			integration.UpdatedAt.Format(time.RFC3339),
+		}
+		for col, field := range fields {
+			table.SetCell(rowIndex+2, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+
+	table.Select(selectedRow, 0)
+
+	footerText := fmt.Sprintf("Showing %d of %d integrations  / filter  Enter apply  c clear  Esc/q close", shown, total)
+	if query != "" {
+		footerText += fmt.Sprintf("  Filter: %s", query)
+	}
+	if filterMode {
+		footerText += "  typing..."
+	}
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter(footerText), 1, 0, false)
+	return root, table
+}
+
+func filterTemplates(templates []client.Template, query string) []client.Template {
+	if query == "" {
+		return append([]client.Template(nil), templates...)
+	}
+
+	targets := make([]string, 0, len(templates))
+	for _, template := range templates {
+		targets = append(targets, strings.ToLower(template.Name+" "+strings.Join(template.CloudResourceTypes, " ")))
+	}
+
+	matches := fuzzy.Find(strings.ToLower(query), targets)
+	filtered := make([]client.Template, 0, len(matches))
+	for _, match := range matches {
+		filtered = append(filtered, templates[match.Index])
+	}
+	return filtered
+}
+
+func filterIntegrations(integrations []client.Integration, query string) []client.Integration {
+	if query == "" {
+		return append([]client.Integration(nil), integrations...)
+	}
+
+	targets := make([]string, 0, len(integrations))
+	for _, integration := range integrations {
+		targets = append(targets, strings.ToLower(integration.Name+" "+integration.IntegrationProvider+" "+integration.IntegrationType))
+	}
+
+	matches := fuzzy.Find(strings.ToLower(query), targets)
+	filtered := make([]client.Integration, 0, len(matches))
+	for _, match := range matches {
+		filtered = append(filtered, integrations[match.Index])
+	}
+	return filtered
+}
+
+func trimLastRune(value string) string {
+	runes := []rune(value)
+	if len(runes) == 0 {
+		return ""
+	}
+	return string(runes[:len(runes)-1])
+}
+
+func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Entities")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"ENTITY", "KEY", "ACTIVE"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	items := []struct {
+		kind  model.EntityKind
+		label string
+		key   string
+	}{
+		{kind: model.EntityResources, label: "Resources", key: "r"},
+		{kind: model.EntityTemplates, label: "Templates", key: "t"},
+		{kind: model.EntityIntegrations, label: "Integrations", key: "i"},
+	}
+
+	selectedRow := 1
+	for rowIndex, item := range items {
+		active := ""
+		if item.kind == activeKind {
+			active = "yes"
+			selectedRow = rowIndex + 1
+		}
+		fields := []string{item.label, item.key, active}
+		for col, field := range fields {
+			table.SetCell(rowIndex+1, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+
+	table.Select(selectedRow, 0)
+
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter("Enter apply  r/t/i quick switch  Esc/q close"), 1, 0, false)
+	return root, table
+}
+
+func settingsView(autoRefresh bool, defaultSortOrder string, refreshSeconds float64, showBreadcrumbs bool) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Settings")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"SETTING", "VALUE"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	value := "off"
+	if autoRefresh {
+		value = "on"
+	}
+	breadcrumbsValue := "off"
+	if showBreadcrumbs {
+		breadcrumbsValue = "on"
+	}
+	sortOrder := strings.ToLower(strings.TrimSpace(defaultSortOrder))
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+
+	table.SetCell(1, 0, tview.NewTableCell("Auto refresh").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 1, tview.NewTableCell(value).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(2, 0, tview.NewTableCell("Show breadcrumbs").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(2, 1, tview.NewTableCell(breadcrumbsValue).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(3, 0, tview.NewTableCell("Default sort order").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(3, 1, tview.NewTableCell(sortOrder).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(4, 0, tview.NewTableCell("Refresh interval (sec)").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(4, 1, tview.NewTableCell(formatRefreshSeconds(refreshSeconds)).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.Select(1, 0)
+
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter("Enter toggle/inc  space/t toggle  d sort order  +/- interval  Esc/q close"), 1, 0, false)
+	return root, table
+}
+
+func formatRefreshSeconds(seconds float64) string {
+	if seconds == float64(int64(seconds)) {
+		return fmt.Sprintf("%.0f", seconds)
+	}
+	return fmt.Sprintf("%.1f", seconds)
+}
+
 func auditLogCreator(auditLog client.AuditLog) string {
 	if auditLog.Creator == nil {
 		return "-"
@@ -790,6 +1798,29 @@ func mapListTable(title string, items []map[string]any) tview.Primitive {
 		}
 	}
 	return table
+}
+
+func buildTemplateTreeNode(node client.TemplateTreeNode) *tview.TreeNode {
+	label := node.Name
+	if node.Status != "" {
+		label = fmt.Sprintf("%s [%s]", node.Name, node.Status)
+	}
+	treeNode := tview.NewTreeNode(label)
+	treeNode.SetReference(node)
+	for _, child := range node.Children {
+		treeNode.AddChild(buildTemplateTreeNode(child))
+	}
+	return treeNode
+}
+
+func expandTemplateTree(node *tview.TreeNode) {
+	if node == nil {
+		return
+	}
+	node.SetExpanded(true)
+	for _, child := range node.GetChildren() {
+		expandTemplateTree(child)
+	}
 }
 
 func sortedKeys(items []map[string]any) []string {
@@ -939,6 +1970,28 @@ func entityTitle(kind model.EntityKind) string {
 	default:
 		return "Resources"
 	}
+}
+
+func (a *App) currentEntityTitle() string {
+	title := entityTitle(a.activeKind)
+	if a.activeKind != model.EntityResources {
+		return title
+	}
+
+	filters := make([]string, 0, 2)
+	if a.resourceTemplateFilter != nil {
+		filters = append(filters, fmt.Sprintf("template: %s", a.resourceTemplateFilter.Name))
+	}
+	if a.resourceIntegrationFilter != nil {
+		filters = append(filters, fmt.Sprintf("integration: %s", a.resourceIntegrationFilter.Name))
+	}
+	if a.hideDestroyedResources {
+		filters = append(filters, "hide destroyed")
+	}
+	if len(filters) == 0 {
+		return title
+	}
+	return fmt.Sprintf("%s [%s]", title, strings.Join(filters, ", "))
 }
 
 func entityEmptyLabel(kind model.EntityKind) string {

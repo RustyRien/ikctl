@@ -208,6 +208,51 @@ func TestResourceAndLogs(t *testing.T) {
 	}
 }
 
+func TestTemplateAndTree(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "GetTemplate"):
+			fmt.Fprint(w, `{"data":{"template":{"id":"t1","name":"aws_redis","description":"Redis template","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","cloudResourceTypes":["redis"]}}}`)
+		case strings.Contains(req.Query, "TemplateTree"):
+			if req.Variables["id"] != "t1" {
+				t.Fatalf("template tree id = %#v", req.Variables["id"])
+			}
+			if req.Variables["direction"] != "children" {
+				t.Fatalf("template tree direction = %#v", req.Variables["direction"])
+			}
+			fmt.Fprint(w, `{"data":{"templateTree":{"id":"t1","nodeId":"t1","name":"aws_redis","status":"ready","children":[{"id":"t2","nodeId":"t2","name":"aws_redis_cache","status":"ready","children":[]}]}}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	template, err := client.Template(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("template query: %v", err)
+	}
+	if template == nil || template.Name != "aws_redis" {
+		t.Fatalf("template = %#v", template)
+	}
+
+	tree, err := client.TemplateTree(context.Background(), "t1", "children")
+	if err != nil {
+		t.Fatalf("template tree query: %v", err)
+	}
+	if tree == nil || tree.Name != "aws_redis" || len(tree.Children) != 1 || tree.Children[0].Name != "aws_redis_cache" {
+		t.Fatalf("tree = %#v", tree)
+	}
+}
+
 func TestIntegrationActions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

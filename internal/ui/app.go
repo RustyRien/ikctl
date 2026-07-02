@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/electrolux-oss/ik-tui/internal/config"
@@ -11,42 +13,74 @@ import (
 )
 
 type App struct {
-	app          *tview.Application
-	header       *Header
-	content      *tview.Pages
-	table        *Table
-	status       *tview.TextView
-	pages        *tview.Pages
-	overlay      *tview.Flex
-	overlayBox   tview.Primitive
-	detailBox    tview.Primitive
-	filterMode   bool
-	filterText   string
-	config       config.Config
-	version      string
-	root         tview.Primitive
-	filterDone   func(string)
-	refreshFn    func()
-	enterFn      func(tabledata.Row)
-	logsFn       func(tabledata.Row)
-	auditFn      func(tabledata.Row)
-	navFn        func(rune)
-	sortFn       func(int, bool)
-	loadMoreFn   func()
-	overlayKeyFn func(*tcell.EventKey) bool
-	detailKeyFn  func(*tcell.EventKey) bool
-	statusBase   string
+	app                 *tview.Application
+	header              *Header
+	content             *tview.Pages
+	table               *Table
+	status              *tview.TextView
+	main                *tview.Flex
+	pages               *tview.Pages
+	overlay             *tview.Flex
+	overlayBox          tview.Primitive
+	detailBox           tview.Primitive
+	detailHistory       []detailPage
+	filterMode          bool
+	filterMenuMode      bool
+	filterText          string
+	config              config.Config
+	version             string
+	root                tview.Primitive
+	filterDone          func(string)
+	refreshFn           func()
+	enterFn             func(tabledata.Row)
+	logsFn              func(tabledata.Row)
+	auditFn             func(tabledata.Row)
+	navFn               func(rune)
+	sortFn              func(int, bool)
+	loadMoreFn          func()
+	templateFilterFn    func()
+	integrationFilterFn func()
+	entitySelectorFn    func()
+	settingsFn          func()
+	toggleDestroyedFn   func()
+	overlayKeyFn        func(*tcell.EventKey) bool
+	detailKeyFn         func(*tcell.EventKey) bool
+	statusBase          string
+	loadingMx           sync.Mutex
+	loadingCount        int
+	loadingFrame        int
+	loadingStop         chan struct{}
+	loadingStopOnce     sync.Once
+	listTitle           string
 }
+
+type detailPage struct {
+	title     string
+	primitive tview.Primitive
+	hotkeys   detailHotkeys
+}
+
+type detailHotkeys int
+
+const (
+	detailHotkeysDefault detailHotkeys = iota
+	detailHotkeysAudit
+	detailHotkeysAuditDetail
+	detailHotkeysTemplateOverview
+)
+
+var loadingFrames = []string{"|", "/", "-", "\\"}
 
 func NewApp(cfg config.Config, version string) *App {
 	applyColors(!cfg.NoColors)
 	app := &App{
-		app:     tview.NewApplication(),
-		header:  NewHeader(cfg, version),
-		table:   NewTable(),
-		status:  tview.NewTextView(),
-		config:  cfg,
-		version: version,
+		app:         tview.NewApplication(),
+		header:      NewHeader(cfg, version),
+		table:       NewTable(),
+		status:      tview.NewTextView(),
+		config:      cfg,
+		version:     version,
+		loadingStop: make(chan struct{}),
 	}
 
 	app.status.SetDynamicColors(true)
@@ -64,22 +98,27 @@ func NewApp(cfg config.Config, version string) *App {
 
 	main := tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(app.header.Primitive(), 6, 0, false).
+		AddItem(app.header.Primitive(), headerHeight(cfg.ShowBreadcrumbs), 0, false).
 		AddItem(app.content, 0, 1, true).
 		AddItem(app.status, 3, 0, false)
 	main.SetBackgroundColor(colorBg)
+	app.main = main
 	app.pages = tview.NewPages().
 		AddPage("main", main, true, true).
 		AddPage("overlay", centered(app.overlay, 140, 36), true, false)
 
 	app.root = app.pages
 	app.app.SetRoot(app.root, true)
+	app.app.EnableMouse(true)
 	app.app.SetInputCapture(app.capture)
 	app.table.Widget().SetBorder(true).SetTitle("Resources")
 	app.table.Widget().SetBackgroundColor(colorBg)
 	app.table.Widget().SetBorderColor(colorHeader)
 	app.table.SetEmptyLabel("No resources")
 	app.table.SetSelectionChangedFunc(app.handleSelectionChanged)
+	app.listTitle = "Resources"
+	app.updateBreadcrumbs()
+	go app.runLoadingSpinner()
 
 	return app
 }
@@ -93,7 +132,35 @@ func (a *App) Run() error {
 }
 
 func (a *App) Stop() {
+	a.loadingStopOnce.Do(func() {
+		close(a.loadingStop)
+	})
 	a.app.Stop()
+}
+
+func (a *App) BeginLoading() func() {
+	a.loadingMx.Lock()
+	a.loadingCount++
+	if a.loadingCount == 1 {
+		a.loadingFrame = 0
+	}
+	a.loadingMx.Unlock()
+	a.queueRenderStatus()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			a.loadingMx.Lock()
+			if a.loadingCount > 0 {
+				a.loadingCount--
+			}
+			if a.loadingCount == 0 {
+				a.loadingFrame = 0
+			}
+			a.loadingMx.Unlock()
+			a.queueRenderStatus()
+		})
+	}
 }
 
 func (a *App) Update(headers []tabledata.Header, rows []tabledata.Row, shown int, total int, lastUpdated time.Time, lastErr error) {
@@ -123,6 +190,14 @@ func (a *App) SetSortState(column int, asc bool) {
 
 func (a *App) SetHeaderUser(identifier string, displayName string, email string) {
 	a.header.SetUser(identifier, displayName, email)
+}
+
+func (a *App) SetBreadcrumbsVisible(visible bool) {
+	a.header.SetBreadcrumbsVisible(visible)
+	if a.main != nil {
+		a.main.ResizeItem(a.header.Primitive(), headerHeight(visible), 0)
+	}
+	a.updateBreadcrumbs()
 }
 
 func (a *App) SetFilterDone(fn func(string)) {
@@ -157,6 +232,26 @@ func (a *App) SetLoadMoreFunc(fn func()) {
 	a.loadMoreFn = fn
 }
 
+func (a *App) SetTemplateFilterFunc(fn func()) {
+	a.templateFilterFn = fn
+}
+
+func (a *App) SetIntegrationFilterFunc(fn func()) {
+	a.integrationFilterFn = fn
+}
+
+func (a *App) SetEntitySelectorFunc(fn func()) {
+	a.entitySelectorFn = fn
+}
+
+func (a *App) SetSettingsFunc(fn func()) {
+	a.settingsFn = fn
+}
+
+func (a *App) SetToggleDestroyedFunc(fn func()) {
+	a.toggleDestroyedFn = fn
+}
+
 func (a *App) SetOverlayKeyFunc(fn func(*tcell.EventKey) bool) {
 	a.overlayKeyFn = fn
 }
@@ -166,8 +261,10 @@ func (a *App) SetDetailKeyFunc(fn func(*tcell.EventKey) bool) {
 }
 
 func (a *App) SetEntityTitle(title string, emptyLabel string) {
+	a.listTitle = title
 	a.table.Widget().SetTitle(title)
 	a.table.SetEmptyLabel(emptyLabel)
+	a.updateBreadcrumbs()
 }
 
 func (a *App) OpenOverlay(title string, text string) {
@@ -178,6 +275,7 @@ func (a *App) OpenOverlay(title string, text string) {
 	textView.SetText(text)
 	a.setOverlayContent(title, textView)
 	a.pages.ShowPage("overlay")
+	a.updateBreadcrumbs()
 	a.app.SetFocus(textView)
 }
 
@@ -197,11 +295,13 @@ func (a *App) UpdateOverlay(title string, text string) {
 		return
 	}
 	a.pages.ShowPage("overlay")
+	a.updateBreadcrumbs()
 }
 
 func (a *App) OpenOverlayPrimitive(title string, primitive tview.Primitive) {
 	a.setOverlayContent(title, primitive)
 	a.pages.ShowPage("overlay")
+	a.updateBreadcrumbs()
 	a.app.SetFocus(primitive)
 }
 
@@ -221,26 +321,48 @@ func (a *App) OpenDetailPrimitive(title string, primitive tview.Primitive) {
 }
 
 func (a *App) ResetHeaderHotkeys() {
+	a.filterMenuMode = false
 	a.header.ResetHotkeys()
 }
 
 func (a *App) SetAuditHeaderHotkeys() {
 	a.header.SetAuditHotkeys()
+	a.updateDetailHotkeys(detailHotkeysAudit)
 }
 
 func (a *App) SetAuditDetailHeaderHotkeys() {
 	a.header.SetAuditDetailHotkeys()
+	a.updateDetailHotkeys(detailHotkeysAuditDetail)
+}
+
+func (a *App) SetTemplateOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetTemplateOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysTemplateOverview)
 }
 
 func (a *App) CloseDetail() {
+	if len(a.detailHistory) > 1 {
+		a.detailHistory = a.detailHistory[:len(a.detailHistory)-1]
+		page := a.detailHistory[len(a.detailHistory)-1]
+		a.restoreDetailPage(page)
+		return
+	}
+	a.detailHistory = nil
 	a.content.HidePage("detail")
 	a.content.SwitchToPage("list")
-	a.header.ResetHotkeys()
+	a.ResetHeaderHotkeys()
+	a.updateBreadcrumbs()
 	a.app.SetFocus(a.table.Widget())
 }
 
 func (a *App) CloseOverlay() {
 	a.pages.HidePage("overlay")
+	a.updateBreadcrumbs()
+	if a.detailVisible() && a.detailBox != nil {
+		a.app.SetFocus(a.detailBox)
+		return
+	}
 	a.app.SetFocus(a.table.Widget())
 }
 
@@ -280,6 +402,41 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 		case tcell.KeyRune:
 			a.filterText += string(event.Rune())
 			a.status.SetText("Filter: " + a.filterText)
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	if a.filterMenuMode {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			a.exitFilterMenuMode()
+			return nil
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'i':
+				a.exitFilterMenuMode()
+				if a.integrationFilterFn != nil {
+					a.integrationFilterFn()
+				}
+				return nil
+			case 't':
+				a.exitFilterMenuMode()
+				if a.templateFilterFn != nil {
+					a.templateFilterFn()
+				}
+				return nil
+			case 'd':
+				a.exitFilterMenuMode()
+				if a.toggleDestroyedFn != nil {
+					a.toggleDestroyedFn()
+				}
+				return nil
+			case 'q':
+				a.exitFilterMenuMode()
+				return nil
+			}
 			return nil
 		default:
 			return nil
@@ -343,6 +500,9 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 	}
 
 	if a.overlayVisible() {
+		if remapped := remapHalfPageScroll(event); remapped != nil {
+			return remapped
+		}
 		if a.overlayKeyFn != nil && a.overlayKeyFn(event) {
 			return nil
 		}
@@ -360,6 +520,9 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 	}
 
 	if a.detailVisible() {
+		if remapped := remapHalfPageScroll(event); remapped != nil {
+			return remapped
+		}
 		if a.detailKeyFn != nil && a.detailKeyFn(event) {
 			return nil
 		}
@@ -431,10 +594,19 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 			}
 			return nil
 		case 'e':
-			if a.table.StartEntityMode() {
-				a.status.SetTitle("Entity")
-				a.status.SetText("Choose entity: " + a.table.EntityHints() + "  Esc cancel")
+			if a.entitySelectorFn != nil {
+				a.entitySelectorFn()
+				return nil
 			}
+			return nil
+		case 'o':
+			if a.settingsFn != nil {
+				a.settingsFn()
+				return nil
+			}
+			return nil
+		case 'f':
+			a.enterFilterMenuMode()
 			return nil
 		case 'r':
 			if a.refreshFn != nil {
@@ -463,21 +635,25 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 
 func (a *App) renderStatus() {
 	if a.filterMode {
-		a.status.SetText("Filter: " + a.filterText)
+		a.status.SetText(a.withLoadingSuffix("Filter: " + a.filterText))
+		return
+	}
+	if a.filterMenuMode {
+		a.status.SetText(a.withLoadingSuffix("Choose filter: i integration, t template, d hide destroyed  Esc back"))
 		return
 	}
 	if a.table.SortMode() {
-		a.status.SetText("Choose column: " + a.table.SortHints() + "  Esc cancel")
+		a.status.SetText(a.withLoadingSuffix("Choose column: " + a.table.SortHints() + "  Esc cancel"))
 		if a.table.AwaitingSortDirection() {
-			a.status.SetText("Choose direction: " + a.table.SortHints() + "  Esc cancel")
+			a.status.SetText(a.withLoadingSuffix("Choose direction: " + a.table.SortHints() + "  Esc cancel"))
 		}
 		return
 	}
 	if a.table.EntityMode() {
-		a.status.SetText("Choose entity: " + a.table.EntityHints() + "  Esc cancel")
+		a.status.SetText(a.withLoadingSuffix("Choose entity: " + a.table.EntityHints() + "  Esc cancel"))
 		return
 	}
-	a.status.SetText(a.statusBase)
+	a.status.SetText(a.withLoadingSuffix(a.statusBase))
 }
 
 func (a *App) handleSelectionChanged(row int, _ int) {
@@ -512,6 +688,23 @@ func (a *App) setOverlayContent(title string, primitive tview.Primitive) {
 }
 
 func (a *App) setDetailContent(title string, primitive tview.Primitive) {
+	a.pushDetailPage(title, primitive)
+	a.showDetailPage(title, primitive)
+}
+
+func (a *App) pushDetailPage(title string, primitive tview.Primitive) {
+	if len(a.detailHistory) > 0 {
+		current := &a.detailHistory[len(a.detailHistory)-1]
+		if current.title == title {
+			current.primitive = primitive
+			current.hotkeys = a.currentDetailHotkeys()
+			return
+		}
+	}
+	a.detailHistory = append(a.detailHistory, detailPage{title: title, primitive: primitive, hotkeys: a.currentDetailHotkeys()})
+}
+
+func (a *App) showDetailPage(title string, primitive tview.Primitive) {
 	container := tview.NewFlex().SetDirection(tview.FlexRow)
 	container.SetBorder(true)
 	container.SetTitle(title)
@@ -525,4 +718,141 @@ func (a *App) setDetailContent(title string, primitive tview.Primitive) {
 	a.content.AddPage("detail", container, true, true)
 	a.content.SwitchToPage("detail")
 	a.detailBox = primitive
+	a.updateBreadcrumbs()
+}
+
+func (a *App) restoreDetailPage(page detailPage) {
+	a.showDetailPage(page.title, page.primitive)
+	a.applyDetailHotkeys(page.hotkeys)
+	a.app.SetFocus(page.primitive)
+}
+
+func (a *App) updateBreadcrumbs() {
+	items := make([]string, 0, 1+len(a.detailHistory)+1)
+	items = append(items, breadcrumbTitle(a.listTitle))
+	for _, page := range a.detailHistory {
+		items = append(items, breadcrumbTitle(page.title))
+	}
+	if a.overlayVisible() {
+		items = append(items, breadcrumbTitle(a.overlay.GetTitle()))
+	}
+	a.header.SetBreadcrumbs(items)
+}
+
+func (a *App) currentDetailHotkeys() detailHotkeys {
+	if len(a.detailHistory) == 0 {
+		return detailHotkeysDefault
+	}
+	return a.detailHistory[len(a.detailHistory)-1].hotkeys
+}
+
+func (a *App) updateDetailHotkeys(hotkeys detailHotkeys) {
+	if len(a.detailHistory) == 0 {
+		return
+	}
+	a.detailHistory[len(a.detailHistory)-1].hotkeys = hotkeys
+}
+
+func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
+	a.filterMenuMode = false
+	switch hotkeys {
+	case detailHotkeysAudit:
+		a.header.SetAuditHotkeys()
+	case detailHotkeysAuditDetail:
+		a.header.SetAuditDetailHotkeys()
+	case detailHotkeysTemplateOverview:
+		a.header.SetTemplateOverviewHotkeys()
+	default:
+		a.header.ResetHotkeys()
+	}
+}
+
+func (a *App) enterFilterMenuMode() {
+	a.filterMenuMode = true
+	a.header.SetFilterMenuHotkeys()
+	a.status.SetTitle("Filters")
+	a.renderStatus()
+}
+
+func (a *App) exitFilterMenuMode() {
+	a.filterMenuMode = false
+	a.header.ResetHotkeys()
+	a.status.SetTitle("Status")
+	a.renderStatus()
+}
+
+func remapHalfPageScroll(event *tcell.EventKey) *tcell.EventKey {
+	switch event.Key() {
+	case tcell.KeyCtrlD:
+		return tcell.NewEventKey(tcell.KeyPgDn, 0, event.Modifiers())
+	case tcell.KeyCtrlU:
+		return tcell.NewEventKey(tcell.KeyPgUp, 0, event.Modifiers())
+	case tcell.KeyRune:
+		switch event.Rune() {
+		case 0x04:
+			return tcell.NewEventKey(tcell.KeyPgDn, 0, event.Modifiers())
+		case 0x15:
+			return tcell.NewEventKey(tcell.KeyPgUp, 0, event.Modifiers())
+		}
+	}
+
+	return nil
+}
+
+func breadcrumbTitle(title string) string {
+	title = strings.TrimSpace(title)
+	title = strings.TrimSuffix(title, "...")
+	if title == "" {
+		return "-"
+	}
+	return title
+}
+
+func headerHeight(showBreadcrumbs bool) int {
+	if showBreadcrumbs {
+		return 9
+	}
+	return 6
+}
+
+func (a *App) withLoadingSuffix(status string) string {
+	a.loadingMx.Lock()
+	defer a.loadingMx.Unlock()
+
+	if a.loadingCount == 0 {
+		return status
+	}
+
+	loading := "Loading " + loadingFrames[a.loadingFrame]
+	if status == "" {
+		return loading
+	}
+	return status + "  " + loading
+}
+
+func (a *App) queueRenderStatus() {
+	a.app.QueueUpdateDraw(func() {
+		a.renderStatus()
+	})
+}
+
+func (a *App) runLoadingSpinner() {
+	ticker := time.NewTicker(120 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-a.loadingStop:
+			return
+		case <-ticker.C:
+			a.loadingMx.Lock()
+			if a.loadingCount == 0 {
+				a.loadingMx.Unlock()
+				continue
+			}
+			a.loadingFrame = (a.loadingFrame + 1) % len(loadingFrames)
+			a.loadingMx.Unlock()
+			a.queueRenderStatus()
+		}
+	}
 }

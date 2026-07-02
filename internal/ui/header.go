@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/electrolux-oss/ik-tui/internal/config"
@@ -8,24 +9,54 @@ import (
 	"github.com/rivo/tview"
 )
 
-var defaultHeaderHotkeys = [][]menuHint{
-	{{key: "s", label: "sort"}, {key: "/", label: "filter"}},
-	{{key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-	{{key: "r", label: "refresh"}, {key: "enter", label: "overview"}},
-	{{key: "l", label: "logs"}, {key: "a", label: "audit"}, {key: "esc", label: "close"}},
-	{{key: "e", label: "entity"}},
-	{{key: "q", label: "quit"}, {key: "ctrl-c", label: "stop"}},
+type headerHints struct {
+	main    [][]menuHint
+	filters [][]menuHint
 }
 
-var auditHeaderHotkeys = [][]menuHint{
-	{{key: "up/down", label: "select"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-	{{key: "enter", label: "open logs"}, {key: "l", label: "open logs"}},
-	{{key: "e", label: "entity"}, {key: "esc", label: "back"}, {key: "q", label: "back"}},
+var defaultHeaderHints = headerHints{
+	main: [][]menuHint{
+		{{key: "s", label: "sort"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "r", label: "refresh"}, {key: "enter", label: "overview"}},
+		{{key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "e", label: "entity"}, {key: "o", label: "settings"}},
+		{{key: "q", label: "quit"}, {key: "ctrl-c", label: "stop"}},
+	},
+	filters: [][]menuHint{
+		{{key: "/", label: "search"}, {key: "f", label: "filters"}},
+	},
 }
 
-var auditDetailHeaderHotkeys = [][]menuHint{
-	{{key: "up/down", label: "scroll"}, {key: "pgup", label: "up"}, {key: "pgdn", label: "down"}},
-	{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+var filterMenuHeaderHints = headerHints{
+	main: defaultHeaderHints.main,
+	filters: [][]menuHint{
+		{{key: "i", label: "integration"}},
+		{{key: "t", label: "template"}},
+		{{key: "d", label: "hide destroyed"}},
+		{{key: "esc", label: "back"}},
+	},
+}
+
+var auditHeaderHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "select"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "enter", label: "open logs"}, {key: "l", label: "open logs"}},
+		{{key: "e", label: "entity"}, {key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
+var auditDetailHeaderHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "pgup", label: "up"}, {key: "pgdn", label: "down"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
+var templateOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "t", label: "tree view"}, {key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
 }
 
 var ikLogo = []string{
@@ -38,14 +69,20 @@ var ikLogo = []string{
 }
 
 type Header struct {
-	root    *tview.Flex
-	info    *tview.Table
-	hotkeys *tview.Table
+	root          *tview.Flex
+	body          *tview.Flex
+	hotkeyColumns *tview.Flex
+	crumbs        *tview.TextView
+	info          *tview.Table
+	hotkeys       *tview.Table
+	filters       *tview.Table
 }
 
 func NewHeader(cfg config.Config, version string) *Header {
+	crumbs := newBreadcrumbs()
 	info := newHeaderInfo(cfg, version)
-	hotkeys := newHeaderHotkeys(defaultHeaderHotkeys)
+	hotkeys := newHeaderHotkeys(defaultHeaderHints.main)
+	filters := newHeaderHotkeys(defaultHeaderHints.filters)
 
 	logo := tview.NewTextView()
 	logo.SetWrap(false)
@@ -55,14 +92,28 @@ func NewHeader(cfg config.Config, version string) *Header {
 	logo.SetTextColor(colorLogo)
 	logo.SetText(strings.Join(ikLogo, "\n"))
 
-	root := tview.NewFlex().
+	hotkeyColumns := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(hotkeys, 0, 3, false).
+		AddItem(filters, 0, 2, false)
+	hotkeyColumns.SetBackgroundColor(colorBg)
+
+	body := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
 		AddItem(info, 0, 2, false).
-		AddItem(hotkeys, 0, 3, false).
+		AddItem(hotkeyColumns, 0, 4, false).
 		AddItem(logo, 12, 0, false)
+	body.SetBackgroundColor(colorBg)
+
+	root := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(body, 6, 0, false).
+		AddItem(crumbs, 3, 0, false)
 	root.SetBackgroundColor(colorBg)
 
-	return &Header{root: root, info: info, hotkeys: hotkeys}
+	header := &Header{root: root, body: body, hotkeyColumns: hotkeyColumns, crumbs: crumbs, info: info, hotkeys: hotkeys, filters: filters}
+	header.SetBreadcrumbsVisible(cfg.ShowBreadcrumbs)
+	return header
 }
 
 func (h *Header) Primitive() tview.Primitive {
@@ -70,25 +121,84 @@ func (h *Header) Primitive() tview.Primitive {
 }
 
 func (h *Header) ResetHotkeys() {
-	h.SetHotkeys(defaultHeaderHotkeys)
+	h.SetHotkeys(defaultHeaderHints)
 }
 
 func (h *Header) SetAuditHotkeys() {
-	h.SetHotkeys(auditHeaderHotkeys)
+	h.SetHotkeys(auditHeaderHints)
+}
+
+func (h *Header) SetFilterMenuHotkeys() {
+	h.SetHotkeys(filterMenuHeaderHints)
+
 }
 
 func (h *Header) SetAuditDetailHotkeys() {
-	h.SetHotkeys(auditDetailHeaderHotkeys)
+	h.SetHotkeys(auditDetailHeaderHints)
 }
 
-func (h *Header) SetHotkeys(rows [][]menuHint) {
+func (h *Header) SetTemplateOverviewHotkeys() {
+	h.SetHotkeys(templateOverviewHints)
+}
+
+func (h *Header) SetHotkeys(hints headerHints) {
 	h.hotkeys.Clear()
+	h.filters.Clear()
 	for row := 0; row < 6; row++ {
-		if row < len(rows) {
-			fillHeaderHintRow(h.hotkeys, row, rows[row])
+		if row < len(hints.main) {
+			fillHeaderHintRow(h.hotkeys, row, hints.main[row])
+		} else {
+			fillHeaderHintRow(h.hotkeys, row, nil)
+		}
+		if row < len(hints.filters) {
+			fillHeaderHintRow(h.filters, row, hints.filters[row])
+		} else {
+			fillHeaderHintRow(h.filters, row, nil)
+		}
+	}
+}
+
+func (h *Header) SetBreadcrumbs(items []string) {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
 			continue
 		}
-		fillHeaderHintRow(h.hotkeys, row, nil)
+		parts = append(parts, escapeHeaderText(item))
+	}
+	if len(parts) == 0 {
+		h.crumbs.SetText("")
+		return
+	}
+
+	var line strings.Builder
+	for i, part := range parts {
+		if i > 0 {
+			line.WriteString(" ")
+		}
+		bg := hexColor(colorCrumbBg)
+		if i == len(parts)-1 {
+			bg = hexColor(colorCrumbLive)
+		}
+		line.WriteString("[")
+		line.WriteString(hexColor(colorCrumbFg))
+		line.WriteString(":")
+		line.WriteString(bg)
+		line.WriteString(":b] <")
+		line.WriteString(part)
+		line.WriteString("> [-:")
+		line.WriteString(hexColor(colorBg))
+		line.WriteString(":-]")
+	}
+	h.crumbs.SetText(line.String())
+}
+
+func (h *Header) SetBreadcrumbsVisible(visible bool) {
+	h.root.Clear()
+	h.root.AddItem(h.body, 6, 0, false)
+	if visible {
+		h.root.AddItem(h.crumbs, 3, 0, false)
 	}
 }
 
@@ -112,6 +222,21 @@ func newHeaderInfo(cfg config.Config, version string) *tview.Table {
 	setHeaderPairRow(info, 5, "email", "-", colorTitle, colorHeader)
 
 	return info
+}
+
+func newBreadcrumbs() *tview.TextView {
+	crumbs := tview.NewTextView()
+	crumbs.SetDynamicColors(true)
+	crumbs.SetWrap(false)
+	crumbs.SetWordWrap(false)
+	crumbs.SetScrollable(false)
+	crumbs.SetBorder(true)
+	crumbs.SetTitle("Breadcrumbs")
+	crumbs.SetBorderColor(colorHeader)
+	crumbs.SetBackgroundColor(colorBg)
+	crumbs.SetTextColor(colorInfo)
+	crumbs.SetText("[#000000:#00ffff:b] <Resources> [-:#000000:-]")
+	return crumbs
 }
 
 func newHeaderHotkeys(rows [][]menuHint) *tview.Table {
@@ -191,4 +316,14 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func escapeHeaderText(value string) string {
+	value = strings.ReplaceAll(value, "[", "[[")
+	value = strings.ReplaceAll(value, "]", "]]")
+	return value
+}
+
+func hexColor(color tcell.Color) string {
+	return fmt.Sprintf("#%06x", uint32(color.Hex()))
 }

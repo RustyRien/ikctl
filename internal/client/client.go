@@ -136,6 +136,39 @@ const templateQuery = `query GetTemplate($id: UUID!) {
   }
 }`
 
+const templateTreeQuery = `query TemplateTree($id: UUID!, $direction: String!) {
+  templateTree(id: $id, direction: $direction) {
+    id
+    nodeId
+    name
+    status
+    children {
+      id
+      nodeId
+      name
+      status
+      children {
+        id
+        nodeId
+        name
+        status
+        children {
+          id
+          nodeId
+          name
+          status
+          children {
+            id
+            nodeId
+            name
+            status
+          }
+        }
+      }
+    }
+  }
+}`
+
 const integrationsQuery = `query ListIntegrations($filter: JSON, $sort: [String!], $range: [Int!]) {
   integrations(filter: $filter, sort: $sort, range: $range) {
     id
@@ -345,6 +378,20 @@ func (c *Client) Template(ctx context.Context, id string) (*Template, error) {
 		return nil, err
 	}
 	return resp.Template, nil
+}
+
+func (c *Client) TemplateTree(ctx context.Context, id string, direction string) (*TemplateTreeNode, error) {
+	resp, err := query[templateTreeQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: templateTreeQuery,
+		Variables: map[string]any{
+			"id":        id,
+			"direction": direction,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.TemplateTree, nil
 }
 
 func (c *Client) Integrations(ctx context.Context, filter map[string]any, sort []string, pageRange []int) (IntegrationsResult, error) {
