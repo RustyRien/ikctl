@@ -40,6 +40,26 @@ func TestResources(t *testing.T) {
 	}
 }
 
+func TestCurrentUser(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"currentUser":{"id":"u1","identifier":"alice","displayName":"Alice Doe","email":"alice@example.com","provider":"google","entityName":"user"}}}`)
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+	user, err := client.CurrentUser(context.Background())
+	if err != nil {
+		t.Fatalf("current user query: %v", err)
+	}
+	if user == nil || user.DisplayName != "Alice Doe" || user.Identifier != "alice" || user.Email != "alice@example.com" {
+		t.Fatalf("user = %#v", user)
+	}
+	if user.Provider != "google" || user.EntityName != "user" {
+		t.Fatalf("user = %#v", user)
+	}
+}
+
 func TestResourcesGraphQLError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

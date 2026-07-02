@@ -171,6 +171,17 @@ const deleteIntegrationMutation = `mutation DeleteIntegration($id: UUID!) {
   deleteIntegration(id: $id)
 }`
 
+const currentUserQuery = `query CurrentUser {
+  currentUser {
+    id
+    identifier
+    displayName
+    email
+    provider
+    entityName
+  }
+}`
+
 const logsQuery = `query ListLogs($filter: JSON, $sort: [String!], $range: [Int!]) {
   logs(filter: $filter, sort: $sort, range: $range) {
     id
@@ -334,6 +345,16 @@ func (c *Client) Integration(ctx context.Context, id string) (*Integration, erro
 		return nil, err
 	}
 	return resp.Integration, nil
+}
+
+func (c *Client) CurrentUser(ctx context.Context) (*User, error) {
+	resp, err := query[currentUserQueryData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query: currentUserQuery,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.CurrentUser, nil
 }
 
 func (c *Client) EnableIntegration(ctx context.Context, id string) error {

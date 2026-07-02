@@ -56,6 +56,15 @@ type Creator struct {
 	DisplayName string `json:"displayName"`
 }
 
+type User struct {
+	ID          string `json:"id"`
+	Identifier  string `json:"identifier"`
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+	Provider    string `json:"provider"`
+	EntityName  string `json:"entityName"`
+}
+
 type Integration struct {
 	ID                  string    `json:"id"`
 	Name                string    `json:"name"`
@@ -118,6 +127,10 @@ type resourcesQueryData struct {
 
 type resourceQueryData struct {
 	Resource *Resource `json:"resource"`
+}
+
+type currentUserQueryData struct {
+	CurrentUser *User `json:"currentUser"`
 }
 
 type templatesQueryData struct {

@@ -39,8 +39,8 @@ type wsMessage struct {
 }
 
 type wsNextPayload struct {
-	Data   logStreamData   `json:"data"`
-	Errors []GraphQLError  `json:"errors"`
+	Data   logStreamData  `json:"data"`
+	Errors []GraphQLError `json:"errors"`
 }
 
 type logStreamData struct {

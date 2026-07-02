@@ -6,9 +6,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/derailed/tcell/v2"
-	"github.com/derailed/tview"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 	"github.com/sahilm/fuzzy"
 )
 

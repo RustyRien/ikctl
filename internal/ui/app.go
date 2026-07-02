@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/derailed/tcell/v2"
-	"github.com/derailed/tview"
 	"github.com/electrolux-oss/ik-tui/internal/config"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type App struct {
@@ -119,6 +119,10 @@ func (a *App) Update(headers []tabledata.Header, rows []tabledata.Row, shown int
 func (a *App) SetSortState(column int, asc bool) {
 	a.table.SetSortState(column, asc)
 	a.renderStatus()
+}
+
+func (a *App) SetHeaderUser(identifier string, displayName string, email string) {
+	a.header.SetUser(identifier, displayName, email)
 }
 
 func (a *App) SetFilterDone(fn func(string)) {

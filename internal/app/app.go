@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/derailed/tcell/v2"
-	"github.com/derailed/tview"
 	"github.com/electrolux-oss/ik-tui/internal/client"
 	"github.com/electrolux-oss/ik-tui/internal/config"
 	"github.com/electrolux-oss/ik-tui/internal/model"
@@ -17,6 +15,8 @@ import (
 	"github.com/electrolux-oss/ik-tui/internal/resource"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
 	uiapp "github.com/electrolux-oss/ik-tui/internal/ui"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type BuildInfo struct {
@@ -111,6 +111,7 @@ func New(cfg config.Config, build BuildInfo, activeEntity string) *App {
 
 func (a *App) Run() error {
 	defer a.cancel()
+	a.loadCurrentUser()
 	a.refreshInitial()
 	go a.loop()
 	return a.ui.Run()
@@ -137,6 +138,18 @@ func (a *App) requestRefresh() {
 	case a.manualKick <- struct{}{}:
 	default:
 	}
+}
+
+func (a *App) loadCurrentUser() {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	user, err := a.client.CurrentUser(ctx)
+	if err != nil || user == nil {
+		return
+	}
+
+	a.ui.SetHeaderUser(user.Identifier, user.DisplayName, user.Email)
 }
 
 func (a *App) requestLoadMore() {
@@ -505,7 +518,7 @@ func formatLogRow(log client.Log, noColors bool) string {
 		return prefix + body
 	}
 	colored := logLevelANSI(log.Level) + prefix + body + "\x1b[0m"
-	return string(tview.TranslateANSI([]byte(colored)))
+	return tview.TranslateANSI(colored)
 }
 
 func logLevelANSI(level string) string {

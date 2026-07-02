@@ -3,9 +3,9 @@ package ui
 import (
 	"strings"
 
-	"github.com/derailed/tcell/v2"
-	"github.com/derailed/tview"
 	"github.com/electrolux-oss/ik-tui/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 var defaultHeaderHotkeys = [][]menuHint{
@@ -39,6 +39,7 @@ var ikLogo = []string{
 
 type Header struct {
 	root    *tview.Flex
+	info    *tview.Table
 	hotkeys *tview.Table
 }
 
@@ -61,7 +62,7 @@ func NewHeader(cfg config.Config, version string) *Header {
 		AddItem(logo, 12, 0, false)
 	root.SetBackgroundColor(colorBg)
 
-	return &Header{root: root, hotkeys: hotkeys}
+	return &Header{root: root, info: info, hotkeys: hotkeys}
 }
 
 func (h *Header) Primitive() tview.Primitive {
@@ -91,7 +92,12 @@ func (h *Header) SetHotkeys(rows [][]menuHint) {
 	}
 }
 
-func newHeaderInfo(cfg config.Config, version string) tview.Primitive {
+func (h *Header) SetUser(identifier string, displayName string, email string) {
+	setHeaderPairRow(h.info, 4, "user", firstNonEmpty(displayName, identifier, "-"), colorTitle, colorInfo)
+	setHeaderPairRow(h.info, 5, "email", firstNonEmpty(email, "-"), colorTitle, colorHeader)
+}
+
+func newHeaderInfo(cfg config.Config, version string) *tview.Table {
 	info := tview.NewTable()
 	info.SetBackgroundColor(colorBg)
 	info.SetBorders(false)
@@ -102,8 +108,8 @@ func newHeaderInfo(cfg config.Config, version string) tview.Primitive {
 	setHeaderPairRow(info, 1, "version", version, colorTitle, colorLogo)
 	setHeaderPairRow(info, 2, "endpoint", cfg.Endpoint, colorTitle, colorHeader)
 	setHeaderPairRow(info, 3, "api", "POST /api/graphql", colorTitle, colorHeader)
-	setHeaderSpacerRow(info, 4)
-	setHeaderSpacerRow(info, 5)
+	setHeaderPairRow(info, 4, "user", "-", colorTitle, colorInfo)
+	setHeaderPairRow(info, 5, "email", "-", colorTitle, colorHeader)
 
 	return info
 }
@@ -176,4 +182,13 @@ func setHeaderSpacerRow(table *tview.Table, row int) {
 	right.SetBackgroundColor(colorBg)
 	right.SetSelectable(false)
 	table.SetCell(row, 1, right)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
