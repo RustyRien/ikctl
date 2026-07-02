@@ -49,6 +49,13 @@ go run . get templates --sort name --sort-order asc
 go run . get integrations -o json
 go run . describe resource r1
 go run . log resources r1
+go run . log resources r1 -f
+go run . log resources r1 --since 1h
+go run . log resources r1 --since 1h -f
+go run . log resources r1 --since 2026-07-02T10:30:00Z
+go run . disable integrations aws-prod
+go run . enable integrations aws-prod
+go run . delete integrations aws-prod
 ```
 
 ## Config
@@ -75,12 +82,19 @@ Precedence: flags > env > config file > defaults.
 - `ikctl get <entity>` prints a table and exits.
 - `ikctl get <entity> <name-or-id>` fetches a single item.
 - `ikctl describe <entity> <name-or-id>` fetches a single item and prints YAML by default.
-- `ikctl log resources <name-or-id>` streams live logs for a resource until `Ctrl-C`.
+- `ikctl log resources <name-or-id>` shows recent logs and exits.
+- `ikctl log resources <name-or-id> -f` shows recent logs, then follows live logs for a resource until `Ctrl-C`.
+- `ikctl log resources <name-or-id> --since <duration|rfc3339>` filters the initial log history by time.
+- `ikctl log resources <name-or-id> --since <duration|rfc3339> -f` filters the initial log history, then follows live output.
+- `ikctl disable integrations <name-or-id>` sends a disable action for an integration.
+- `ikctl enable integrations <name-or-id>` sends an enable action for an integration.
+- `ikctl delete integrations <name-or-id>` deletes an integration.
 - Supported entities: `resources`, `templates`, `integrations`.
 - Output formats: `table`, `wide`, `json`, `yaml`, `name`.
 - Common flags: `-o`, `--sort`, `--sort-order`, `--limit`, `--filter key=value`.
 - Global flags are inherited by subcommands: `--config`, `--endpoint`, `--token`, `--refresh`, `--insecure-skip-tls-verify`, `--no-colors`.
-- Live log streaming uses the InfraKitchen GraphQL `logStream(entityName, entityId)` subscription over `graphql-ws` at `/api/graphql`.
+- Live log follow mode uses the InfraKitchen GraphQL `logStream(entityName, entityId)` subscription over `graphql-ws` at `/api/graphql`.
+- `--since` accepts either a Go duration like `1h30m` or an RFC3339 timestamp like `2026-07-02T10:30:00Z`.
 - Entity-specific filters:
   - resources: `--state`, `--status`, `--label`
   - integrations: `--provider`, `--type`
@@ -94,7 +108,7 @@ Precedence: flags > env > config file > defaults.
 - `l`: open selected resource logs
 - `Esc`, `q`: close detail view
 - `s`: enter sort mode, press a highlighted column number, then `a` for ascending or `d` for descending to fetch sorted results from the backend, `Esc` to cancel
-- `e`: choose entity (`1` resources, `2` templates, `3` integrations)
+- `e`: choose entity (`r` resources, `t` templates, `i` integrations)
 
 The main list shows `Shown / Total` in the status bar and loads more rows from the backend automatically as you scroll near the bottom.
 

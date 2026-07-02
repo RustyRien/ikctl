@@ -136,3 +136,49 @@ func TestResourceAndLogs(t *testing.T) {
 		t.Fatalf("audit scoped logs = %#v total=%d", auditScopedLogs, total)
 	}
 }
+
+func TestIntegrationActions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "GetIntegration"):
+			fmt.Fprint(w, `{"data":{"integration":{"id":"i1","name":"aws-prod","description":"AWS","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","integrationProvider":"aws","integrationType":"cloud"}}}`)
+		case strings.Contains(req.Query, "IntegrationAction"):
+			input, _ := req.Variables["input"].(map[string]any)
+			action := input["action"]
+			if req.Variables["id"] != "i1" {
+				t.Fatalf("action id = %#v", req.Variables["id"])
+			}
+			if action != "enable" && action != "disable" {
+				t.Fatalf("unexpected action = %#v", action)
+			}
+			fmt.Fprintf(w, `{"data":{"integrationAction":{"id":"i1","entityName":"integration","status":"%s"}}}`, action)
+		case strings.Contains(req.Query, "DeleteIntegration"):
+			if req.Variables["id"] != "i1" {
+				t.Fatalf("delete id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"deleteIntegration":true}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	if err := client.EnableIntegration(context.Background(), "i1"); err != nil {
+		t.Fatalf("enable integration: %v", err)
+	}
+	if err := client.DisableIntegration(context.Background(), "i1"); err != nil {
+		t.Fatalf("disable integration: %v", err)
+	}
+	if err := client.DeleteIntegration(context.Background(), "i1"); err != nil {
+		t.Fatalf("delete integration: %v", err)
+	}
+}

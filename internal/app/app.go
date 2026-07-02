@@ -197,12 +197,20 @@ func (a *App) currentModel() *model.EntityModel {
 }
 
 func (a *App) handleNav(key rune) {
-	index := int(key - '1')
-	ordered := a.registry.Ordered()
-	if index < 0 || index >= len(ordered) {
+	var next model.EntityKind
+	switch key {
+	case 'r':
+		next = model.EntityResources
+	case 't':
+		next = model.EntityTemplates
+	case 'i':
+		next = model.EntityIntegrations
+	default:
 		return
 	}
-	next := model.EntityKind(ordered[index].Name)
+	if _, ok := a.models[next]; !ok {
+		return
+	}
 	if next == a.activeKind {
 		return
 	}

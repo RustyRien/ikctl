@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/derailed/tcell/v2"
 	"github.com/derailed/tview"
@@ -205,16 +206,16 @@ func (t *Table) EntityMode() bool {
 }
 
 func (t *Table) EntityHints() string {
-	return "1:Resources  2:Templates  3:Integrations"
+	return "r:Resources  t:Templates  i:Integrations"
 }
 
-func (t *Table) EntityForDigit(digit rune) (rune, bool) {
+func (t *Table) EntityForKey(key rune) (rune, bool) {
 	if !t.entityMode {
 		return 0, false
 	}
-	switch digit {
-	case '1', '2', '3':
-		return digit, true
+	switch unicode.ToLower(key) {
+	case 'r', 't', 'i':
+		return unicode.ToLower(key), true
 	default:
 		return 0, false
 	}

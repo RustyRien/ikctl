@@ -323,7 +323,7 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 			a.renderStatus()
 			return nil
 		case tcell.KeyRune:
-			if entity, ok := a.table.EntityForDigit(event.Rune()); ok {
+			if entity, ok := a.table.EntityForKey(event.Rune()); ok {
 				if a.navFn != nil {
 					a.navFn(entity)
 				}

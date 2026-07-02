@@ -138,6 +138,14 @@ type integrationQueryData struct {
 	Integration *Integration `json:"integration"`
 }
 
+type integrationActionMutationData struct {
+	IntegrationAction *entityActionResult `json:"integrationAction"`
+}
+
+type deleteIntegrationMutationData struct {
+	DeleteIntegration bool `json:"deleteIntegration"`
+}
+
 type logsQueryData struct {
 	Logs      []Log `json:"logs"`
 	LogsCount int   `json:"logsCount"`
@@ -159,6 +167,12 @@ type graphqlResponse[T any] struct {
 
 type GraphQLError struct {
 	Message string `json:"message"`
+}
+
+type entityActionResult struct {
+	ID         string `json:"id"`
+	EntityName string `json:"entityName"`
+	Status     string `json:"status"`
 }
 
 type LogStreamMessage struct {

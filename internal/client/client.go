@@ -159,6 +159,18 @@ const integrationQuery = `query GetIntegration($id: UUID!) {
   }
 }`
 
+const integrationActionMutation = `mutation IntegrationAction($id: UUID!, $input: IntegrationActionInput!) {
+  integrationAction(id: $id, input: $input) {
+    id
+    entityName
+    status
+  }
+}`
+
+const deleteIntegrationMutation = `mutation DeleteIntegration($id: UUID!) {
+  deleteIntegration(id: $id)
+}`
+
 const logsQuery = `query ListLogs($filter: JSON, $sort: [String!], $range: [Int!]) {
   logs(filter: $filter, sort: $sort, range: $range) {
     id
@@ -324,6 +336,30 @@ func (c *Client) Integration(ctx context.Context, id string) (*Integration, erro
 	return resp.Integration, nil
 }
 
+func (c *Client) EnableIntegration(ctx context.Context, id string) error {
+	return c.integrationAction(ctx, id, "enable")
+}
+
+func (c *Client) DisableIntegration(ctx context.Context, id string) error {
+	return c.integrationAction(ctx, id, "disable")
+}
+
+func (c *Client) DeleteIntegration(ctx context.Context, id string) error {
+	resp, err := query[deleteIntegrationMutationData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query: deleteIntegrationMutation,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.DeleteIntegration {
+		return errors.New("integration delete failed")
+	}
+	return nil
+}
+
 func (c *Client) LogsForResource(ctx context.Context, resourceID string, pageRange []int) ([]Log, int, error) {
 	executionStart, err := c.latestExecutionStart(ctx, resourceID)
 	if err != nil {
@@ -405,6 +441,19 @@ func (c *Client) latestExecutionStart(ctx context.Context, resourceID string) (i
 	}
 
 	return resp.Logs[0].ExecutionStart, nil
+}
+
+func (c *Client) integrationAction(ctx context.Context, id string, action string) error {
+	_, err := query[integrationActionMutationData](ctx, c.httpClient, c.endpoint, c.token, graphqlRequest{
+		Query: integrationActionMutation,
+		Variables: map[string]any{
+			"id": id,
+			"input": map[string]any{
+				"action": action,
+			},
+		},
+	})
+	return err
 }
 
 func query[T any](ctx context.Context, httpClient *http.Client, endpoint string, token string, reqBody graphqlRequest) (T, error) {
