@@ -39,6 +39,7 @@ type App struct {
 }
 
 func NewApp(cfg config.Config, version string) *App {
+	applyColors(!cfg.NoColors)
 	app := &App{
 		app:     tview.NewApplication(),
 		header:  NewHeader(cfg, version),
@@ -105,7 +106,11 @@ func (a *App) Update(headers []tabledata.Header, rows []tabledata.Row, shown int
 		status += fmt.Sprintf("  Filter: %s", filter)
 	}
 	if lastErr != nil {
-		status += fmt.Sprintf("  [red]Error[-]: %v", lastErr)
+		if a.config.NoColors {
+			status += fmt.Sprintf("  Error: %v", lastErr)
+		} else {
+			status += fmt.Sprintf("  [red]Error[-]: %v", lastErr)
+		}
 	}
 	a.statusBase = status
 	a.renderStatus()

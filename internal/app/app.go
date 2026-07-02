@@ -14,6 +14,7 @@ import (
 	"github.com/electrolux-oss/ik-tui/internal/config"
 	"github.com/electrolux-oss/ik-tui/internal/model"
 	"github.com/electrolux-oss/ik-tui/internal/render"
+	"github.com/electrolux-oss/ik-tui/internal/resource"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
 	uiapp "github.com/electrolux-oss/ik-tui/internal/ui"
 )
@@ -46,6 +47,9 @@ type App struct {
 	build               BuildInfo
 	client              *client.Client
 	models              map[model.EntityKind]*model.EntityModel
+	registry            *resource.Registry
+	kindByName          map[string]model.EntityKind
+	nameByKind          map[model.EntityKind]string
 	activeKind          model.EntityKind
 	ui                  *uiapp.App
 	manualKick          chan struct{}
@@ -56,16 +60,20 @@ type App struct {
 	auditLogTable       *tview.Table
 }
 
-func New(cfg config.Config, build BuildInfo) *App {
+func New(cfg config.Config, build BuildInfo, activeEntity string) *App {
 	ctx, cancel := context.WithCancel(context.Background())
 	client := client.New(cfg)
 	ui := uiapp.NewApp(cfg, build.Version)
+	registry := resource.DefaultRegistry(client)
 
 	app := &App{
 		config:     cfg,
 		build:      build,
 		client:     client,
 		models:     map[model.EntityKind]*model.EntityModel{},
+		registry:   registry,
+		kindByName: map[string]model.EntityKind{},
+		nameByKind: map[model.EntityKind]string{},
 		activeKind: model.EntityResources,
 		ui:         ui,
 		manualKick: make(chan struct{}, 1),
@@ -73,9 +81,19 @@ func New(cfg config.Config, build BuildInfo) *App {
 		cancel:     cancel,
 	}
 
-	app.models[model.EntityResources] = model.NewResourcesModel(client)
-	app.models[model.EntityTemplates] = model.NewTemplatesModel(client)
-	app.models[model.EntityIntegrations] = model.NewIntegrationsModel(client)
+	ordered := registry.Ordered()
+	for index, descriptor := range ordered {
+		kind := model.EntityKind(descriptor.Name)
+		app.models[kind] = model.NewModelFromDescriptor(kind, descriptor)
+		app.kindByName[descriptor.Name] = kind
+		app.nameByKind[kind] = descriptor.Name
+		if index == 0 {
+			app.activeKind = kind
+		}
+	}
+	if kind, ok := app.kindByName[activeEntity]; ok {
+		app.activeKind = kind
+	}
 
 	ui.SetRefreshFunc(app.requestRefresh)
 	ui.SetEnterFunc(app.openOverview)
@@ -179,17 +197,12 @@ func (a *App) currentModel() *model.EntityModel {
 }
 
 func (a *App) handleNav(key rune) {
-	var next model.EntityKind
-	switch key {
-	case '1':
-		next = model.EntityResources
-	case '2':
-		next = model.EntityTemplates
-	case '3':
-		next = model.EntityIntegrations
-	default:
+	index := int(key - '1')
+	ordered := a.registry.Ordered()
+	if index < 0 || index >= len(ordered) {
 		return
 	}
+	next := model.EntityKind(ordered[index].Name)
 	if next == a.activeKind {
 		return
 	}
@@ -365,7 +378,7 @@ func (a *App) openLogs(row tabledata.Row) {
 		if err != nil {
 			text = fmt.Sprintf("Failed to load resource logs.\n\n%v", err)
 		} else {
-			text = formatLogs(logs, total)
+			text = formatLogs(logs, total, a.config.NoColors)
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
@@ -449,7 +462,7 @@ func (a *App) openAuditLogDetail(selection auditLogSelection) {
 		if err != nil {
 			text = fmt.Sprintf("Failed to load audit log details.\n\n%v", err)
 		} else {
-			text = formatLogs(logs, total)
+			text = formatLogs(logs, total, a.config.NoColors)
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
@@ -459,20 +472,20 @@ func (a *App) openAuditLogDetail(selection auditLogSelection) {
 	}()
 }
 
-func formatLogs(logs []client.Log, total int) string {
+func formatLogs(logs []client.Log, total int, noColors bool) string {
 	if len(logs) == 0 {
 		return "No logs found for this resource.\n\nEsc or q to close"
 	}
 
 	lines := []string{fmt.Sprintf("Showing %d of %d logs", len(logs), total), ""}
 	for i := len(logs) - 1; i >= 0; i-- {
-		lines = append(lines, formatLogRow(logs[i]))
+		lines = append(lines, formatLogRow(logs[i], noColors))
 	}
 	lines = append(lines, "", "Esc or q to close")
 	return strings.Join(lines, "\n")
 }
 
-func formatLogRow(log client.Log) string {
+func formatLogRow(log client.Log, noColors bool) string {
 	prefix := log.CreatedAt.Format(time.RFC3339) + "  "
 	indent := strings.Repeat(" ", len(prefix))
 	bodyLines := strings.Split(log.Data, "\n")
@@ -480,6 +493,9 @@ func formatLogRow(log client.Log) string {
 		bodyLines[i] = logLevelPrefixRX.ReplaceAllString(line, "")
 	}
 	body := strings.Join(bodyLines, "\n"+indent)
+	if noColors {
+		return prefix + body
+	}
 	colored := logLevelANSI(log.Level) + prefix + body + "\x1b[0m"
 	return string(tview.TranslateANSI([]byte(colored)))
 }

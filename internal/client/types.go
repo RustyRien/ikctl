@@ -27,6 +27,10 @@ type Resource struct {
 	Children          []ResourceReference `json:"children"`
 }
 
+func (r Resource) GetName() string {
+	return r.Name
+}
+
 type Template struct {
 	ID                 string    `json:"id"`
 	Name               string    `json:"name"`
@@ -34,6 +38,10 @@ type Template struct {
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`
 	CloudResourceTypes []string  `json:"cloudResourceTypes"`
+}
+
+func (t Template) GetName() string {
+	return t.Name
 }
 
 type Workspace struct {
@@ -56,6 +64,10 @@ type Integration struct {
 	UpdatedAt           time.Time `json:"updatedAt"`
 	IntegrationProvider string    `json:"integrationProvider"`
 	IntegrationType     string    `json:"integrationType"`
+}
+
+func (i Integration) GetName() string {
+	return i.Name
 }
 
 type SourceCodeVersion struct {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/electrolux-oss/ik-tui/internal/client"
 	"github.com/electrolux-oss/ik-tui/internal/render"
+	"github.com/electrolux-oss/ik-tui/internal/resource"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
 )
 
@@ -95,6 +96,26 @@ func NewIntegrationsModel(client *client.Client) *EntityModel {
 				rows = append(rows, renderer.Row(item))
 			}
 			return rows, result.Total, nil
+		},
+	}
+}
+
+func NewModelFromDescriptor(kind EntityKind, descriptor *resource.Descriptor) *EntityModel {
+	sortField := ""
+	sortDesc := false
+	if len(descriptor.DefaultSort) == 2 {
+		sortField = descriptor.DefaultSort[0]
+		sortDesc = descriptor.DefaultSort[1] == "DESC"
+	}
+	return &EntityModel{
+		kind:      kind,
+		headers:   descriptor.Headers,
+		sortField: sortField,
+		sortDesc:  sortDesc,
+		pageSize:  100,
+		refreshFn: func(ctx context.Context, sort []string, pageRange []int) ([]tabledata.Row, int, error) {
+			rows, _, total, err := descriptor.List(ctx, nil, sort, pageRange)
+			return rows, total, err
 		},
 	}
 }

@@ -47,6 +47,28 @@ func (r *TemplateRenderer) Row(template client.Template) tabledata.Row {
 	}
 }
 
+func TemplateWideHeaders() []tabledata.Header {
+	return []tabledata.Header{
+		{Title: "NAME", Key: "name", SortField: "name"},
+		{Title: "CLOUD TYPES", Key: "cloud_types"},
+		{Title: "UPDATED", Key: "updated", SortField: "updated_at"},
+		{Title: "ID", Key: "id"},
+		{Title: "AGE", Key: "age", SortField: "created_at"},
+	}
+}
+
+func TemplateWideRow(template client.Template) tabledata.Row {
+	row := NewTemplateRenderer().Row(template)
+	row.Fields = []string{
+		row.Fields[0],
+		row.Fields[1],
+		row.Fields[2],
+		template.ID,
+		row.Fields[3],
+	}
+	return row
+}
+
 func orSlice(values []string, fallback []string) []string {
 	if len(values) == 0 {
 		return fallback

@@ -50,3 +50,27 @@ func (r *IntegrationRenderer) Row(integration client.Integration) tabledata.Row 
 		Raw:       integration,
 	}
 }
+
+func IntegrationWideHeaders() []tabledata.Header {
+	return []tabledata.Header{
+		{Title: "NAME", Key: "name", SortField: "name"},
+		{Title: "PROVIDER", Key: "provider", SortField: "integration_provider"},
+		{Title: "TYPE", Key: "type", SortField: "integration_type"},
+		{Title: "UPDATED", Key: "updated", SortField: "updated_at"},
+		{Title: "ID", Key: "id"},
+		{Title: "AGE", Key: "age", SortField: "created_at"},
+	}
+}
+
+func IntegrationWideRow(integration client.Integration) tabledata.Row {
+	row := NewIntegrationRenderer().Row(integration)
+	row.Fields = []string{
+		row.Fields[0],
+		row.Fields[1],
+		row.Fields[2],
+		row.Fields[3],
+		integration.ID,
+		row.Fields[4],
+	}
+	return row
+}

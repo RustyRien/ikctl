@@ -98,7 +98,7 @@ func newHeaderInfo(cfg config.Config, version string) tview.Primitive {
 	info.SetSelectable(false, false)
 	info.SetSeparator(' ')
 
-	setHeaderPairRow(info, 0, "app", "ik-tui", colorTitleInfo, colorTitle)
+	setHeaderPairRow(info, 0, "app", "ikctl", colorTitleInfo, colorTitle)
 	setHeaderPairRow(info, 1, "version", version, colorTitle, colorLogo)
 	setHeaderPairRow(info, 2, "endpoint", cfg.Endpoint, colorTitle, colorHeader)
 	setHeaderPairRow(info, 3, "api", "POST /api/graphql", colorTitle, colorHeader)

@@ -15,7 +15,7 @@ import (
 const (
 	defaultEndpoint        = "http://localhost:8000"
 	defaultRefreshInterval = 2 * time.Second
-	configRelPath          = "ik-tui/config.yaml"
+	configRelPath          = "ikctl/config.yaml"
 )
 
 type Config struct {
@@ -24,6 +24,7 @@ type Config struct {
 	RefreshInterval    time.Duration `yaml:"-"`
 	RefreshSeconds     float64       `yaml:"refresh_seconds"`
 	InsecureSkipVerify bool          `yaml:"insecure_skip_tls_verify"`
+	NoColors           bool          `yaml:"no_colors"`
 	ConfigPath         string        `yaml:"-"`
 }
 
@@ -32,6 +33,7 @@ type fileConfig struct {
 	Token              string  `yaml:"token"`
 	RefreshSeconds     float64 `yaml:"refresh_seconds"`
 	InsecureSkipVerify bool    `yaml:"insecure_skip_tls_verify"`
+	NoColors           bool    `yaml:"no_colors"`
 }
 
 type FlagOverrides struct {
@@ -41,6 +43,8 @@ type FlagOverrides struct {
 	RefreshSeconds     float64
 	InsecureSkipVerify bool
 	HasInsecureFlag    bool
+	NoColors           bool
+	HasNoColorsFlag    bool
 }
 
 func Load(flags FlagOverrides) (Config, error) {
@@ -112,6 +116,7 @@ func loadFile(cfg *Config, path string) error {
 		cfg.RefreshInterval = time.Duration(fileCfg.RefreshSeconds * float64(time.Second))
 	}
 	cfg.InsecureSkipVerify = fileCfg.InsecureSkipVerify
+	cfg.NoColors = fileCfg.NoColors
 
 	return nil
 }
@@ -131,6 +136,9 @@ func applyEnv(cfg *Config) {
 	if value := os.Getenv("IK_INSECURE_SKIP_TLS_VERIFY"); value != "" {
 		cfg.InsecureSkipVerify = strings.EqualFold(value, "true") || value == "1"
 	}
+	if value := os.Getenv("IK_NO_COLORS"); value != "" {
+		cfg.NoColors = strings.EqualFold(value, "true") || value == "1"
+	}
 }
 
 func applyFlags(cfg *Config, flags FlagOverrides) {
@@ -145,6 +153,9 @@ func applyFlags(cfg *Config, flags FlagOverrides) {
 	}
 	if flags.HasInsecureFlag || flags.InsecureSkipVerify {
 		cfg.InsecureSkipVerify = flags.InsecureSkipVerify
+	}
+	if flags.HasNoColorsFlag || flags.NoColors {
+		cfg.NoColors = flags.NoColors
 	}
 }
 

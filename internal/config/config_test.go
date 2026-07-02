@@ -12,10 +12,11 @@ func TestLoadPrecedence(t *testing.T) {
 	t.Setenv("IK_TOKEN", "env-token")
 	t.Setenv("IK_REFRESH_SECONDS", "4")
 	t.Setenv("IK_INSECURE_SKIP_TLS_VERIFY", "true")
+	t.Setenv("IK_NO_COLORS", "true")
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	err := os.WriteFile(path, []byte("endpoint: https://file.example\ntoken: file-token\nrefresh_seconds: 3\ninsecure_skip_tls_verify: false\n"), 0o644)
+	err := os.WriteFile(path, []byte("endpoint: https://file.example\ntoken: file-token\nrefresh_seconds: 3\ninsecure_skip_tls_verify: false\nno_colors: false\n"), 0o644)
 	if err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
@@ -27,6 +28,8 @@ func TestLoadPrecedence(t *testing.T) {
 		RefreshSeconds:     5,
 		InsecureSkipVerify: false,
 		HasInsecureFlag:    true,
+		NoColors:           false,
+		HasNoColorsFlag:    true,
 	})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -43,6 +46,9 @@ func TestLoadPrecedence(t *testing.T) {
 	}
 	if cfg.InsecureSkipVerify {
 		t.Fatalf("expected insecure skip verify false")
+	}
+	if cfg.NoColors {
+		t.Fatalf("expected no colors false")
 	}
 }
 
