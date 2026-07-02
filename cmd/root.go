@@ -30,6 +30,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd())
 	rootCmd.AddCommand(getCmd())
 	rootCmd.AddCommand(describeCmd())
+	rootCmd.AddCommand(logCmd())
 
 	rootCmd.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "Path to config file")
 	rootCmd.PersistentFlags().StringVar(&flags.Endpoint, "endpoint", "", "InfraKitchen base URL")

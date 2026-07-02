@@ -59,8 +59,8 @@ func resourcesDescriptor(c *client.Client) *Descriptor {
 			return renderer.Row(*item), *item, nil
 		},
 		ResolveByName: func(ctx context.Context, name string) (tabledata.Row, any, error) {
-			return resolveByName(ctx, name, renderer.Row, func(ctx context.Context) ([]client.Resource, error) {
-				result, err := c.Resources(ctx, nil, []string{"name", "ASC"}, []int{0, 1000})
+			return resolveByName(ctx, name, renderer.Row, func(ctx context.Context, name string) ([]client.Resource, error) {
+				result, err := c.Resources(ctx, map[string]any{"name__like": name}, []string{"name", "ASC"}, []int{0, 100})
 				if err != nil {
 					return nil, err
 				}
@@ -111,8 +111,8 @@ func templatesDescriptor(c *client.Client) *Descriptor {
 			return renderer.Row(*item), *item, nil
 		},
 		ResolveByName: func(ctx context.Context, name string) (tabledata.Row, any, error) {
-			return resolveByName(ctx, name, renderer.Row, func(ctx context.Context) ([]client.Template, error) {
-				result, err := c.Templates(ctx, nil, []string{"name", "ASC"}, []int{0, 1000})
+			return resolveByName(ctx, name, renderer.Row, func(ctx context.Context, name string) ([]client.Template, error) {
+				result, err := c.Templates(ctx, map[string]any{"name__like": name}, []string{"name", "ASC"}, []int{0, 100})
 				if err != nil {
 					return nil, err
 				}
@@ -165,8 +165,8 @@ func integrationsDescriptor(c *client.Client) *Descriptor {
 			return renderer.Row(*item), *item, nil
 		},
 		ResolveByName: func(ctx context.Context, name string) (tabledata.Row, any, error) {
-			return resolveByName(ctx, name, renderer.Row, func(ctx context.Context) ([]client.Integration, error) {
-				result, err := c.Integrations(ctx, nil, []string{"name", "ASC"}, []int{0, 1000})
+			return resolveByName(ctx, name, renderer.Row, func(ctx context.Context, name string) ([]client.Integration, error) {
+				result, err := c.Integrations(ctx, map[string]any{"name__like": name}, []string{"name", "ASC"}, []int{0, 100})
 				if err != nil {
 					return nil, err
 				}
@@ -195,8 +195,8 @@ type namedEntity interface {
 	GetName() string
 }
 
-func resolveByName[T namedEntity](ctx context.Context, name string, rowFn func(T) tabledata.Row, listFn func(context.Context) ([]T, error)) (tabledata.Row, any, error) {
-	items, err := listFn(ctx)
+func resolveByName[T namedEntity](ctx context.Context, name string, rowFn func(T) tabledata.Row, listFn func(context.Context, string) ([]T, error)) (tabledata.Row, any, error) {
+	items, err := listFn(ctx, name)
 	if err != nil {
 		return tabledata.Row{}, nil, err
 	}

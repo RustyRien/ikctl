@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/adrg/xdg v0.5.3
+	github.com/coder/websocket v1.8.14
 	github.com/derailed/tcell/v2 v2.3.1-rc.3
 	github.com/derailed/tview v0.8.5
 	github.com/sahilm/fuzzy v0.1.1

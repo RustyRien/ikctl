@@ -161,6 +161,11 @@ type GraphQLError struct {
 	Message string `json:"message"`
 }
 
+type LogStreamMessage struct {
+	Data  string `json:"data"`
+	Level string `json:"level"`
+}
+
 type ResourcesResult struct {
 	Items []Resource
 	Total int

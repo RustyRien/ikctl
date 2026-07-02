@@ -5,6 +5,7 @@
 ## Features
 
 - Kubectl-style `get` commands for InfraKitchen entities
+- Live `ikctl log resources <name-or-id>` streaming via GraphQL subscription
 - Live TUI backed by the same InfraKitchen GraphQL entity layer
 - Default columns: `NAME`, `TEMPLATE`, `STATE`, `STATUS`, `WORKSPACE`, `AGE`
 - Periodic refresh (default `2s`)
@@ -47,6 +48,7 @@ go run . get resources redis-prod
 go run . get templates --sort name --sort-order asc
 go run . get integrations -o json
 go run . describe resource r1
+go run . log resources r1
 ```
 
 ## Config
@@ -73,10 +75,12 @@ Precedence: flags > env > config file > defaults.
 - `ikctl get <entity>` prints a table and exits.
 - `ikctl get <entity> <name-or-id>` fetches a single item.
 - `ikctl describe <entity> <name-or-id>` fetches a single item and prints YAML by default.
+- `ikctl log resources <name-or-id>` streams live logs for a resource until `Ctrl-C`.
 - Supported entities: `resources`, `templates`, `integrations`.
 - Output formats: `table`, `wide`, `json`, `yaml`, `name`.
 - Common flags: `-o`, `--sort`, `--sort-order`, `--limit`, `--filter key=value`.
 - Global flags are inherited by subcommands: `--config`, `--endpoint`, `--token`, `--refresh`, `--insecure-skip-tls-verify`, `--no-colors`.
+- Live log streaming uses the InfraKitchen GraphQL `logStream(entityName, entityId)` subscription over `graphql-ws` at `/api/graphql`.
 - Entity-specific filters:
   - resources: `--state`, `--status`, `--label`
   - integrations: `--provider`, `--type`
