@@ -17,8 +17,10 @@ type Resource struct {
 	Labels            []string            `json:"labels"`
 	Template          *Template           `json:"template"`
 	Workspace         *Workspace          `json:"workspace"`
+	Storage           *Storage            `json:"storage"`
 	Creator           *Creator            `json:"creator"`
 	Integrations      []Integration       `json:"integrationIds"`
+	Secrets           []Secret            `json:"secretIds"`
 	RevisionNumber    int                 `json:"revisionNumber"`
 	Abstract          bool                `json:"abstract"`
 	StoragePath       string              `json:"storagePath"`
@@ -49,6 +51,16 @@ func (t Template) GetName() string {
 }
 
 type Workspace struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type Storage struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type Secret struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }

@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -201,6 +202,18 @@ func (m *EntityModel) SortState() (int, bool) {
 	return -1, true
 }
 
+func (m *EntityModel) SortStateForHeaders(headers []tabledata.Header) (int, bool) {
+	m.mx.RLock()
+	defer m.mx.RUnlock()
+
+	for index, header := range headers {
+		if header.SortField == m.sortField && header.SortField != "" {
+			return index, !m.sortDesc
+		}
+	}
+	return -1, true
+}
+
 func (m *EntityModel) SetSortByColumn(column int, asc bool) bool {
 	m.mx.Lock()
 	defer m.mx.Unlock()
@@ -213,6 +226,19 @@ func (m *EntityModel) SetSortByColumn(column int, asc bool) bool {
 		return false
 	}
 	m.sortField = header.SortField
+	m.sortDesc = !asc
+	return true
+}
+
+func (m *EntityModel) SetSortField(field string, asc bool) bool {
+	field = strings.TrimSpace(field)
+	if field == "" {
+		return false
+	}
+
+	m.mx.Lock()
+	defer m.mx.Unlock()
+	m.sortField = field
 	m.sortDesc = !asc
 	return true
 }

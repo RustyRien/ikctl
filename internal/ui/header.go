@@ -24,6 +24,7 @@ var defaultHeaderHints = headerHints{
 	},
 	filters: [][]menuHint{
 		{{key: "/", label: "search"}, {key: "f", label: "filters"}},
+		{{key: "v", label: "columns"}},
 	},
 }
 

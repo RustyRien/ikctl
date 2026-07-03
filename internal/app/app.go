@@ -46,6 +46,36 @@ type auditLogSelection struct {
 	Creator        string
 }
 
+type resourceColumnOption struct {
+	Field       string
+	Header      tabledata.Header
+	Description string
+	DefaultOn   bool
+}
+
+var resourceColumnOptions = []resourceColumnOption{
+	{Field: "name", Header: tabledata.Header{Title: "NAME", Key: "name", SortField: "name"}, Description: "Resource name", DefaultOn: true},
+	{Field: "template", Header: tabledata.Header{Title: "TEMPLATE", Key: "template"}, Description: "Template", DefaultOn: true},
+	{Field: "sourceCodeVersion", Header: tabledata.Header{Title: "TEMPLATE VERSION", Key: "sourceCodeVersion", SortField: "source_code_version.tag"}, Description: "Template version", DefaultOn: false},
+	{Field: "state", Header: tabledata.Header{Title: "STATE", Key: "state", SortField: "state"}, Description: "Lifecycle state", DefaultOn: true},
+	{Field: "status", Header: tabledata.Header{Title: "STATUS", Key: "status", SortField: "status"}, Description: "Execution status", DefaultOn: true},
+	{Field: "createdAt", Header: tabledata.Header{Title: "CREATED", Key: "createdAt", SortField: "created_at"}, Description: "Created time", DefaultOn: false},
+	{Field: "updatedAt", Header: tabledata.Header{Title: "UPDATED", Key: "updatedAt", SortField: "updated_at"}, Description: "Last updated", DefaultOn: false},
+	{Field: "creator", Header: tabledata.Header{Title: "CREATOR", Key: "creator", SortField: "creator.identifier"}, Description: "Creator", DefaultOn: false},
+	{Field: "storage", Header: tabledata.Header{Title: "STORAGE", Key: "storage"}, Description: "Storage", DefaultOn: false},
+	{Field: "workspace", Header: tabledata.Header{Title: "WORKSPACE", Key: "workspace"}, Description: "Workspace", DefaultOn: false},
+	{Field: "integrationIds", Header: tabledata.Header{Title: "INTEGRATIONS", Key: "integrationIds"}, Description: "Integrations", DefaultOn: false},
+	{Field: "secretIds", Header: tabledata.Header{Title: "SECRETS", Key: "secretIds", SortField: "secret_ids.name"}, Description: "Secrets", DefaultOn: false},
+	{Field: "parents", Header: tabledata.Header{Title: "PARENTS", Key: "parents", SortField: "parents.name"}, Description: "Parent resources", DefaultOn: false},
+	{Field: "children", Header: tabledata.Header{Title: "CHILDREN", Key: "children", SortField: "children.name"}, Description: "Child resources", DefaultOn: false},
+	{Field: "variables", Header: tabledata.Header{Title: "VARIABLES", Key: "variables"}, Description: "Variables", DefaultOn: false},
+	{Field: "outputs", Header: tabledata.Header{Title: "OUTPUTS", Key: "outputs"}, Description: "Outputs", DefaultOn: false},
+	{Field: "labels", Header: tabledata.Header{Title: "LABELS", Key: "labels"}, Description: "Labels", DefaultOn: false},
+	{Field: "dependencyTags", Header: tabledata.Header{Title: "DEPENDENCY TAGS", Key: "dependencyTags"}, Description: "Dependency tags", DefaultOn: false},
+	{Field: "dependencyConfig", Header: tabledata.Header{Title: "DEPENDENCY CONFIG", Key: "dependencyConfig"}, Description: "Dependency config", DefaultOn: false},
+	{Field: "age", Header: tabledata.Header{Title: "AGE", Key: "age", SortField: "created_at"}, Description: "Age", DefaultOn: true},
+}
+
 var logLevelPrefixRX = regexp.MustCompile(`(?i)^\[(trace|debug|info|warn|warning|error|fatal)\]\s*`)
 
 type App struct {
@@ -78,6 +108,8 @@ type App struct {
 	integrationFilterTable    *tview.Table
 	integrationFilterQuery    string
 	integrationFilterMode     bool
+	resourceColumnsTable      *tview.Table
+	visibleResourceColumns    map[string]bool
 	resourceTemplateFilter    *client.Template
 	resourceIntegrationFilter *client.Integration
 	hideDestroyedResources    bool
@@ -109,6 +141,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 		ctx:             ctx,
 		cancel:          cancel,
 	}
+	app.visibleResourceColumns = defaultVisibleResourceColumns()
 
 	ordered := registry.Ordered()
 	for index, descriptor := range ordered {
@@ -133,6 +166,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetLoadMoreFunc(app.requestLoadMore)
 	ui.SetTemplateFilterFunc(app.openTemplateFilter)
 	ui.SetIntegrationFilterFunc(app.openIntegrationFilter)
+	ui.SetResourceColumnsFunc(app.openResourceColumns)
 	ui.SetToggleDestroyedFunc(app.toggleHideDestroyedResources)
 	ui.SetEntitySelectorFunc(app.openEntitySelector)
 	ui.SetSettingsFunc(app.openSettings)
@@ -238,10 +272,13 @@ func (a *App) refresh() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	model := a.currentModel()
-	_ = model.Refresh(ctx)
-	headers, rows, total, lastUpdated, lastErr := model.Snapshot()
-	sortColumn, sortAsc := model.SortState()
+	entityModel := a.currentModel()
+	_ = entityModel.Refresh(ctx)
+	headers, rows, total, lastUpdated, lastErr := entityModel.Snapshot()
+	if a.activeKind == model.EntityResources {
+		headers, rows = a.projectResourceList(headers, rows)
+	}
+	sortColumn, sortAsc := entityModel.SortStateForHeaders(headers)
 	a.ui.Application().QueueUpdateDraw(func() {
 		a.ui.SetEntityTitle(a.currentEntityTitle(), entityEmptyLabel(a.activeKind))
 		a.ui.Update(headers, rows, len(rows), total, lastUpdated, lastErr)
@@ -266,9 +303,12 @@ func (a *App) refreshInitial() {
 }
 
 func (a *App) renderCurrentModel() {
-	model := a.currentModel()
-	headers, rows, total, lastUpdated, lastErr := model.Snapshot()
-	sortColumn, sortAsc := model.SortState()
+	entityModel := a.currentModel()
+	headers, rows, total, lastUpdated, lastErr := entityModel.Snapshot()
+	if a.activeKind == model.EntityResources {
+		headers, rows = a.projectResourceList(headers, rows)
+	}
+	sortColumn, sortAsc := entityModel.SortStateForHeaders(headers)
 	a.ui.SetEntityTitle(a.currentEntityTitle(), entityEmptyLabel(a.activeKind))
 	a.ui.Update(headers, rows, len(rows), total, lastUpdated, lastErr)
 	a.ui.SetSortState(sortColumn, sortAsc)
@@ -313,6 +353,7 @@ func (a *App) handleNav(key rune) {
 	a.integrationFilterTable = nil
 	a.integrationFilterQuery = ""
 	a.integrationFilterMode = false
+	a.resourceColumnsTable = nil
 	a.activeTemplateDetail = nil
 	a.templateTree = nil
 	a.ui.CloseOverlay()
@@ -322,6 +363,17 @@ func (a *App) handleNav(key rune) {
 }
 
 func (a *App) handleSort(column int, asc bool) {
+	if a.activeKind == model.EntityResources {
+		headers, _ := a.projectResourceList(render.ResourceListHeaders(), nil)
+		if column < 0 || column >= len(headers) {
+			return
+		}
+		if !a.currentModel().SetSortField(headers[column].SortField, asc) {
+			return
+		}
+		a.requestRefresh()
+		return
+	}
 	if !a.currentModel().SetSortByColumn(column, asc) {
 		return
 	}
@@ -456,6 +508,7 @@ func (a *App) openEntitySelector() {
 	a.integrationFilterTable = nil
 	a.integrationFilterQuery = ""
 	a.integrationFilterMode = false
+	a.resourceColumnsTable = nil
 
 	primitive, table := entitySelectorView(a.activeKind)
 	a.entitySelectorTable = table
@@ -476,6 +529,7 @@ func (a *App) openSettings() {
 	a.integrationFilterTable = nil
 	a.integrationFilterQuery = ""
 	a.integrationFilterMode = false
+	a.resourceColumnsTable = nil
 
 	primitive, table := settingsView(a.config.AutoRefresh, a.config.DefaultSortOrder, a.config.RefreshSeconds, a.config.ShowBreadcrumbs)
 	a.settingsTable = table
@@ -678,6 +732,7 @@ func (a *App) resetResourceFilterOverlays() {
 	a.integrationFilterTable = nil
 	a.integrationFilterQuery = ""
 	a.integrationFilterMode = false
+	a.resourceColumnsTable = nil
 }
 
 func (a *App) resourceFilters() map[string]any {
@@ -895,6 +950,29 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				a.ui.CloseOverlay()
 				a.handleNav(event.Rune())
 				return true
+			}
+		}
+		return false
+	}
+
+	if a.resourceColumnsTable != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.toggleSelectedResourceColumn()
+			return true
+		case tcell.KeyEsc:
+			a.resourceColumnsTable = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case ' ':
+				a.toggleSelectedResourceColumn()
+				return true
+			case 'q':
+				a.resourceColumnsTable = nil
+				return false
 			}
 		}
 		return false
@@ -1730,6 +1808,136 @@ func settingsView(autoRefresh bool, defaultSortOrder string, refreshSeconds floa
 	root.AddItem(table, 0, 1, true)
 	root.AddItem(overviewFooter("Enter toggle/inc  space/t toggle  d sort order  +/- interval  Esc/q close"), 1, 0, false)
 	return root, table
+}
+
+func resourceColumnsView(options []resourceColumnOption, visible map[string]bool) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Columns")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"COLUMN", "VISIBLE", "DESCRIPTION"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	for rowIndex, option := range options {
+		state := "off"
+		if visible[option.Field] {
+			state = "on"
+		}
+		fields := []string{option.Header.Title, state, option.Description}
+		for col, field := range fields {
+			table.SetCell(rowIndex+1, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+
+	table.Select(1, 0)
+
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter("Enter/space toggle  Esc/q close"), 1, 0, false)
+	return root, table
+}
+
+func defaultVisibleResourceColumns() map[string]bool {
+	visible := make(map[string]bool, len(resourceColumnOptions))
+	for _, option := range resourceColumnOptions {
+		if option.DefaultOn {
+			visible[option.Field] = true
+		}
+	}
+	return visible
+}
+
+func (a *App) openResourceColumns() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+	a.auditLogRows = nil
+	a.auditLogTable = nil
+	a.entitySelectorTable = nil
+	a.settingsTable = nil
+	a.resetResourceFilterOverlays()
+	primitive, table := resourceColumnsView(resourceColumnOptions, a.visibleResourceColumns)
+	a.resourceColumnsTable = table
+	a.ui.OpenOverlayPrimitive("Resource Columns", primitive)
+}
+
+func (a *App) toggleSelectedResourceColumn() {
+	if a.resourceColumnsTable == nil {
+		return
+	}
+	selectedRow, _ := a.resourceColumnsTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+	index := selectedRow - 1
+	if index < 0 || index >= len(resourceColumnOptions) {
+		return
+	}
+	option := resourceColumnOptions[index]
+	if a.visibleResourceColumns[option.Field] {
+		visibleCount := 0
+		for _, current := range resourceColumnOptions {
+			if a.visibleResourceColumns[current.Field] {
+				visibleCount++
+			}
+		}
+		if visibleCount == 1 {
+			return
+		}
+		a.visibleResourceColumns[option.Field] = false
+	} else {
+		a.visibleResourceColumns[option.Field] = true
+	}
+	primitive, table := resourceColumnsView(resourceColumnOptions, a.visibleResourceColumns)
+	table.Select(selectedRow, 0)
+	a.resourceColumnsTable = table
+	a.ui.OpenOverlayPrimitive("Resource Columns", primitive)
+	a.renderCurrentModel()
+}
+
+func (a *App) projectResourceList(_ []tabledata.Header, rows []tabledata.Row) ([]tabledata.Header, []tabledata.Row) {
+	headers := render.ResourceListHeaders()
+	visibleIndexes := make([]int, 0, len(resourceColumnOptions))
+	projectedHeaders := make([]tabledata.Header, 0, len(resourceColumnOptions))
+	for index, option := range resourceColumnOptions {
+		if !a.visibleResourceColumns[option.Field] {
+			continue
+		}
+		if index >= len(headers) {
+			continue
+		}
+		visibleIndexes = append(visibleIndexes, index)
+		projectedHeaders = append(projectedHeaders, headers[index])
+	}
+	if len(visibleIndexes) == 0 {
+		return headers, rows
+	}
+	projectedRows := make([]tabledata.Row, 0, len(rows))
+	for _, row := range rows {
+		fullRow := row
+		if resourceValue, ok := row.Raw.(client.Resource); ok {
+			fullRow = render.ResourceListRow(resourceValue)
+		}
+		fields := make([]string, 0, len(visibleIndexes))
+		for _, index := range visibleIndexes {
+			if index < len(fullRow.Fields) {
+				fields = append(fields, fullRow.Fields[index])
+			}
+		}
+		projectedRow := fullRow
+		projectedRow.Fields = fields
+		projectedRows = append(projectedRows, projectedRow)
+	}
+	return projectedHeaders, projectedRows
 }
 
 func formatRefreshSeconds(seconds float64) string {

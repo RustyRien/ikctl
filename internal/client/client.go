@@ -36,6 +36,10 @@ const resourcesQuery = `query ListResources($filter: JSON, $sort: [String!], $ra
       id
       name
     }
+    storage {
+      id
+      name
+    }
     creator {
       id
       identifier
@@ -48,6 +52,37 @@ const resourcesQuery = `query ListResources($filter: JSON, $sort: [String!], $ra
       integrationProvider
       integrationType
     }
+    secretIds {
+      id
+      name
+    }
+    revisionNumber
+    storagePath
+    sourceCodeVersion {
+      id
+      identifier
+      sourceCodeFolder
+      sourceCodeVersion
+      sourceCodeBranch
+      status
+    }
+    parents {
+      id
+      name
+      state
+      status
+    }
+    children {
+      id
+      name
+      state
+      status
+    }
+    variables
+    outputs
+    labels
+    dependencyTags
+    dependencyConfig
   }
   resourcesCount(filter: $filter)
 }`
@@ -90,6 +125,10 @@ const resourceQuery = `query GetResource($id: UUID!) {
       id
       name
     }
+    storage {
+      id
+      name
+    }
     creator {
       id
       identifier
@@ -101,6 +140,10 @@ const resourceQuery = `query GetResource($id: UUID!) {
       name
       integrationProvider
       integrationType
+    }
+    secretIds {
+      id
+      name
     }
     sourceCodeVersion {
       id

@@ -40,6 +40,7 @@ type App struct {
 	loadMoreFn          func()
 	templateFilterFn    func()
 	integrationFilterFn func()
+	resourceColumnsFn   func()
 	entitySelectorFn    func()
 	settingsFn          func()
 	toggleDestroyedFn   func()
@@ -238,6 +239,10 @@ func (a *App) SetTemplateFilterFunc(fn func()) {
 
 func (a *App) SetIntegrationFilterFunc(fn func()) {
 	a.integrationFilterFn = fn
+}
+
+func (a *App) SetResourceColumnsFunc(fn func()) {
+	a.resourceColumnsFn = fn
 }
 
 func (a *App) SetEntitySelectorFunc(fn func()) {
@@ -613,6 +618,11 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				a.refreshFn()
 			}
 			return nil
+		case 'v':
+			if a.resourceColumnsFn != nil {
+				a.resourceColumnsFn()
+				return nil
+			}
 		case 'l':
 			if a.logsFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
