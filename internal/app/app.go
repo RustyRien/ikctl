@@ -37,8 +37,9 @@ type templateDetailSelection struct {
 }
 
 type auditLogSelection struct {
-	ResourceID     string
-	ResourceName   string
+	EntityID       string
+	EntityName     string
+	EntityLabel    string
 	AuditLogID     string
 	Action         string
 	CreatedAt      time.Time
@@ -76,6 +77,20 @@ var resourceColumnOptions = []resourceColumnOption{
 	{Field: "age", Header: tabledata.Header{Title: "AGE", Key: "age", SortField: "created_at"}, Description: "Age", DefaultOn: true},
 }
 
+var templateColumnOptions = []resourceColumnOption{
+	{Field: "name", Header: tabledata.Header{Title: "NAME", Key: "name", SortField: "name"}, Description: "Template name", DefaultOn: true},
+	{Field: "cloudResourceTypes", Header: tabledata.Header{Title: "CLOUD TYPES", Key: "cloudResourceTypes"}, Description: "Cloud resource types", DefaultOn: true},
+	{Field: "description", Header: tabledata.Header{Title: "DESCRIPTION", Key: "description"}, Description: "Description", DefaultOn: false},
+	{Field: "labels", Header: tabledata.Header{Title: "LABELS", Key: "labels"}, Description: "Labels", DefaultOn: false},
+	{Field: "status", Header: tabledata.Header{Title: "STATUS", Key: "status", SortField: "status"}, Description: "Status", DefaultOn: false},
+	{Field: "abstract", Header: tabledata.Header{Title: "ABSTRACT", Key: "abstract"}, Description: "Abstract flag", DefaultOn: false},
+	{Field: "createdAt", Header: tabledata.Header{Title: "CREATED", Key: "createdAt", SortField: "created_at"}, Description: "Created time", DefaultOn: false},
+	{Field: "updatedAt", Header: tabledata.Header{Title: "UPDATED", Key: "updatedAt", SortField: "updated_at"}, Description: "Last updated", DefaultOn: true},
+	{Field: "entityName", Header: tabledata.Header{Title: "ENTITY", Key: "entityName"}, Description: "Entity name", DefaultOn: false},
+	{Field: "id", Header: tabledata.Header{Title: "ID", Key: "id"}, Description: "Template ID", DefaultOn: false},
+	{Field: "age", Header: tabledata.Header{Title: "AGE", Key: "age", SortField: "created_at"}, Description: "Age", DefaultOn: true},
+}
+
 var logLevelPrefixRX = regexp.MustCompile(`(?i)^\[(trace|debug|info|warn|warning|error|fatal)\]\s*`)
 
 type App struct {
@@ -110,6 +125,8 @@ type App struct {
 	integrationFilterMode     bool
 	resourceColumnsTable      *tview.Table
 	visibleResourceColumns    map[string]bool
+	templateColumnsTable      *tview.Table
+	visibleTemplateColumns    map[string]bool
 	resourceTemplateFilter    *client.Template
 	resourceIntegrationFilter *client.Integration
 	hideDestroyedResources    bool
@@ -142,6 +159,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 		cancel:          cancel,
 	}
 	app.visibleResourceColumns = defaultVisibleResourceColumns()
+	app.visibleTemplateColumns = defaultVisibleTemplateColumns()
 
 	ordered := registry.Ordered()
 	for index, descriptor := range ordered {
@@ -166,7 +184,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetLoadMoreFunc(app.requestLoadMore)
 	ui.SetTemplateFilterFunc(app.openTemplateFilter)
 	ui.SetIntegrationFilterFunc(app.openIntegrationFilter)
-	ui.SetResourceColumnsFunc(app.openResourceColumns)
+	ui.SetResourceColumnsFunc(app.openColumns)
 	ui.SetToggleDestroyedFunc(app.toggleHideDestroyedResources)
 	ui.SetEntitySelectorFunc(app.openEntitySelector)
 	ui.SetSettingsFunc(app.openSettings)
@@ -278,6 +296,9 @@ func (a *App) refresh() {
 	if a.activeKind == model.EntityResources {
 		headers, rows = a.projectResourceList(headers, rows)
 	}
+	if a.activeKind == model.EntityTemplates {
+		headers, rows = a.projectTemplateList(headers, rows)
+	}
 	sortColumn, sortAsc := entityModel.SortStateForHeaders(headers)
 	a.ui.Application().QueueUpdateDraw(func() {
 		a.ui.SetEntityTitle(a.currentEntityTitle(), entityEmptyLabel(a.activeKind))
@@ -307,6 +328,9 @@ func (a *App) renderCurrentModel() {
 	headers, rows, total, lastUpdated, lastErr := entityModel.Snapshot()
 	if a.activeKind == model.EntityResources {
 		headers, rows = a.projectResourceList(headers, rows)
+	}
+	if a.activeKind == model.EntityTemplates {
+		headers, rows = a.projectTemplateList(headers, rows)
 	}
 	sortColumn, sortAsc := entityModel.SortStateForHeaders(headers)
 	a.ui.SetEntityTitle(a.currentEntityTitle(), entityEmptyLabel(a.activeKind))
@@ -354,6 +378,7 @@ func (a *App) handleNav(key rune) {
 	a.integrationFilterQuery = ""
 	a.integrationFilterMode = false
 	a.resourceColumnsTable = nil
+	a.templateColumnsTable = nil
 	a.activeTemplateDetail = nil
 	a.templateTree = nil
 	a.ui.CloseOverlay()
@@ -365,6 +390,17 @@ func (a *App) handleNav(key rune) {
 func (a *App) handleSort(column int, asc bool) {
 	if a.activeKind == model.EntityResources {
 		headers, _ := a.projectResourceList(render.ResourceListHeaders(), nil)
+		if column < 0 || column >= len(headers) {
+			return
+		}
+		if !a.currentModel().SetSortField(headers[column].SortField, asc) {
+			return
+		}
+		a.requestRefresh()
+		return
+	}
+	if a.activeKind == model.EntityTemplates {
+		headers, _ := a.projectTemplateList(render.TemplateListHeaders(), nil)
 		if column < 0 || column >= len(headers) {
 			return
 		}
@@ -733,6 +769,7 @@ func (a *App) resetResourceFilterOverlays() {
 	a.integrationFilterQuery = ""
 	a.integrationFilterMode = false
 	a.resourceColumnsTable = nil
+	a.templateColumnsTable = nil
 }
 
 func (a *App) resourceFilters() map[string]any {
@@ -770,6 +807,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading resource overview...")
+	a.ui.SetResourceOverviewHotkeys()
 
 	go func() {
 		done := a.ui.BeginLoading()
@@ -795,6 +833,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 		a.ui.Application().QueueUpdateDraw(func() {
 			a.overlayTemplateJump = jump
 			a.ui.OpenDetailPrimitive(title, primitive)
+			a.ui.SetResourceOverviewHotkeys()
 		})
 	}()
 }
@@ -841,6 +880,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading integration overview...")
+	a.ui.SetDetailHotkeys()
 
 	go func() {
 		done := a.ui.BeginLoading()
@@ -861,6 +901,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 
 		a.ui.Application().QueueUpdateDraw(func() {
 			a.ui.OpenDetailPrimitive(title, primitive)
+			a.ui.SetDetailHotkeys()
 		})
 	}()
 }
@@ -972,6 +1013,29 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				return true
 			case 'q':
 				a.resourceColumnsTable = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.templateColumnsTable != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.toggleSelectedTemplateColumn()
+			return true
+		case tcell.KeyEsc:
+			a.templateColumnsTable = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case ' ':
+				a.toggleSelectedTemplateColumn()
+				return true
+			case 'q':
+				a.templateColumnsTable = nil
 				return false
 			}
 		}
@@ -1188,66 +1252,68 @@ func (a *App) openLogs(row tabledata.Row) {
 		return
 	}
 
-	resource, ok := row.Raw.(client.Resource)
+	entityID, entityName, entityLabel, ok := auditEntityRowMeta(row)
 	if !ok {
 		return
 	}
 
-	title := fmt.Sprintf("Logs: %s", resource.Name)
+	title := fmt.Sprintf("Logs: %s", entityName)
 	a.overlayTemplateJump = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
-	a.ui.OpenDetail(title, "Loading resource logs...")
+	a.ui.OpenDetail(title, fmt.Sprintf("Loading %s logs...", strings.ToLower(entityLabel)))
+	a.ui.SetDetailHotkeys()
 
-	go func() {
+	go func(entityID string, entityLabel string) {
 		done := a.ui.BeginLoading()
 		defer done()
 
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
-		logs, total, err := a.client.LogsForResource(ctx, resource.ID, []int{0, 200})
+		logs, total, err := a.client.LogsForEntity(ctx, entityID, []int{0, 200})
 		text := "No logs"
 		if err != nil {
-			text = fmt.Sprintf("Failed to load resource logs.\n\n%v", err)
+			text = fmt.Sprintf("Failed to load %s logs.\n\n%v", strings.ToLower(entityLabel), err)
 		} else {
-			text = formatLogs(logs, total, a.config.NoColors)
+			text = formatLogs(logs, total, a.config.NoColors, entityLabel)
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
 			a.ui.OpenDetail(title, text)
+			a.ui.SetDetailHotkeys()
 		})
-	}()
+	}(entityID, entityLabel)
 }
 
 func (a *App) openAuditLogs(row tabledata.Row) {
-	resource, ok := row.Raw.(client.Resource)
+	entityID, entityName, entityLabel, ok := auditEntityRowMeta(row)
 	if !ok {
 		return
 	}
 
-	title := fmt.Sprintf("Audit Logs: %s", resource.Name)
+	title := fmt.Sprintf("Audit Logs: %s", entityName)
 	a.overlayTemplateJump = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading audit logs...")
 	a.ui.SetAuditHeaderHotkeys()
 
-	go func() {
+	go func(entityID string, entityName string, entityLabel string) {
 		done := a.ui.BeginLoading()
 		defer done()
 
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
-		auditLogs, err := a.client.AuditLogsForResource(ctx, resource.ID, []int{0, 200})
+		auditLogs, err := a.client.AuditLogsForEntity(ctx, entityID, []int{0, 200})
 		var primitive tview.Primitive
 		var rows []tabledata.Row
 		var table *tview.Table
 		if err != nil {
 			primitive = errorView(fmt.Sprintf("Failed to load audit logs.\n\n%v", err))
 		} else {
-			primitive, rows, table = auditLogsView(resource, auditLogs)
+			primitive, rows, table = auditLogsView(entityID, entityName, entityLabel, auditLogs)
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
@@ -1256,7 +1322,7 @@ func (a *App) openAuditLogs(row tabledata.Row) {
 			a.ui.OpenDetailPrimitive(title, primitive)
 			a.ui.SetAuditHeaderHotkeys()
 		})
-	}()
+	}(entityID, entityName, entityLabel)
 }
 
 func (a *App) openSelectedAuditLog() {
@@ -1282,7 +1348,7 @@ func (a *App) openSelectedAuditLog() {
 }
 
 func (a *App) openAuditLogDetail(selection auditLogSelection) {
-	title := fmt.Sprintf("Logs: %s / %s", selection.ResourceName, selection.Action)
+	title := fmt.Sprintf("Logs: %s / %s", selection.EntityName, selection.Action)
 	a.overlayTemplateJump = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
@@ -1296,12 +1362,12 @@ func (a *App) openAuditLogDetail(selection auditLogSelection) {
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
-		logs, total, err := a.client.LogsForAudit(ctx, selection.ResourceID, selection.AuditLogID, 0, []int{0, 400})
+		logs, total, err := a.client.LogsForAudit(ctx, selection.EntityID, selection.AuditLogID, 0, []int{0, 400})
 		text := "No logs"
 		if err != nil {
 			text = fmt.Sprintf("Failed to load audit log details.\n\n%v", err)
 		} else {
-			text = formatLogs(logs, total, a.config.NoColors)
+			text = formatLogs(logs, total, a.config.NoColors, selection.EntityLabel)
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
@@ -1311,9 +1377,9 @@ func (a *App) openAuditLogDetail(selection auditLogSelection) {
 	}()
 }
 
-func formatLogs(logs []client.Log, total int, noColors bool) string {
+func formatLogs(logs []client.Log, total int, noColors bool, entityLabel string) string {
 	if len(logs) == 0 {
-		return "No logs found for this resource.\n\nEsc or q to close"
+		return fmt.Sprintf("No logs found for this %s.\n\nEsc or q to close", strings.ToLower(blankDash(entityLabel)))
 	}
 
 	lines := []string{fmt.Sprintf("Showing %d of %d logs", len(logs), total), ""}
@@ -1499,7 +1565,7 @@ func integrationOverviewView(integration client.Integration) tview.Primitive {
 	return root
 }
 
-func auditLogsView(resource client.Resource, auditLogs []client.AuditLog) (tview.Primitive, []tabledata.Row, *tview.Table) {
+func auditLogsView(entityID string, entityName string, entityLabel string, auditLogs []client.AuditLog) (tview.Primitive, []tabledata.Row, *tview.Table) {
 	headers := []string{"ACTION", "CREATOR", "REV", "CREATED", "AGE", "AUDIT ID"}
 	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
 	table.SetBorder(true)
@@ -1518,8 +1584,9 @@ func auditLogsView(resource client.Resource, auditLogs []client.AuditLog) (tview
 	now := time.Now()
 	for rowIndex, auditLog := range auditLogs {
 		selection := auditLogSelection{
-			ResourceID:     resource.ID,
-			ResourceName:   resource.Name,
+			EntityID:       entityID,
+			EntityName:     entityName,
+			EntityLabel:    entityLabel,
 			AuditLogID:     auditLog.ID,
 			Action:         blankDash(auditLog.Action),
 			CreatedAt:      auditLog.CreatedAt,
@@ -1552,6 +1619,19 @@ func auditLogsView(resource client.Resource, auditLogs []client.AuditLog) (tview
 	root.AddItem(table, 0, 1, true)
 	root.AddItem(overviewFooter("Enter/l open logs  Esc/q close"), 1, 0, false)
 	return root, rows, table
+}
+
+func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, entityLabel string, ok bool) {
+	switch value := row.Raw.(type) {
+	case client.Resource:
+		return value.ID, value.Name, "resource", true
+	case client.Template:
+		return value.ID, value.Name, "template", true
+	case client.Integration:
+		return value.ID, value.Name, "integration", true
+	default:
+		return "", "", "", false
+	}
 }
 
 func overviewFooter(text string) tview.Primitive {
@@ -1856,6 +1936,25 @@ func defaultVisibleResourceColumns() map[string]bool {
 	return visible
 }
 
+func defaultVisibleTemplateColumns() map[string]bool {
+	visible := make(map[string]bool, len(templateColumnOptions))
+	for _, option := range templateColumnOptions {
+		if option.DefaultOn {
+			visible[option.Field] = true
+		}
+	}
+	return visible
+}
+
+func (a *App) openColumns() {
+	switch a.activeKind {
+	case model.EntityResources:
+		a.openResourceColumns()
+	case model.EntityTemplates:
+		a.openTemplateColumns()
+	}
+}
+
 func (a *App) openResourceColumns() {
 	if a.activeKind != model.EntityResources {
 		return
@@ -1868,6 +1967,21 @@ func (a *App) openResourceColumns() {
 	primitive, table := resourceColumnsView(resourceColumnOptions, a.visibleResourceColumns)
 	a.resourceColumnsTable = table
 	a.ui.OpenOverlayPrimitive("Resource Columns", primitive)
+}
+
+func (a *App) openTemplateColumns() {
+	if a.activeKind != model.EntityTemplates {
+		return
+	}
+	a.auditLogRows = nil
+	a.auditLogTable = nil
+	a.entitySelectorTable = nil
+	a.settingsTable = nil
+	a.templateTree = nil
+	a.resourceColumnsTable = nil
+	primitive, table := resourceColumnsView(templateColumnOptions, a.visibleTemplateColumns)
+	a.templateColumnsTable = table
+	a.ui.OpenOverlayPrimitive("Template Columns", primitive)
 }
 
 func (a *App) toggleSelectedResourceColumn() {
@@ -1901,6 +2015,40 @@ func (a *App) toggleSelectedResourceColumn() {
 	table.Select(selectedRow, 0)
 	a.resourceColumnsTable = table
 	a.ui.OpenOverlayPrimitive("Resource Columns", primitive)
+	a.renderCurrentModel()
+}
+
+func (a *App) toggleSelectedTemplateColumn() {
+	if a.templateColumnsTable == nil {
+		return
+	}
+	selectedRow, _ := a.templateColumnsTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+	index := selectedRow - 1
+	if index < 0 || index >= len(templateColumnOptions) {
+		return
+	}
+	option := templateColumnOptions[index]
+	if a.visibleTemplateColumns[option.Field] {
+		visibleCount := 0
+		for _, current := range templateColumnOptions {
+			if a.visibleTemplateColumns[current.Field] {
+				visibleCount++
+			}
+		}
+		if visibleCount == 1 {
+			return
+		}
+		a.visibleTemplateColumns[option.Field] = false
+	} else {
+		a.visibleTemplateColumns[option.Field] = true
+	}
+	primitive, table := resourceColumnsView(templateColumnOptions, a.visibleTemplateColumns)
+	table.Select(selectedRow, 0)
+	a.templateColumnsTable = table
+	a.ui.OpenOverlayPrimitive("Template Columns", primitive)
 	a.renderCurrentModel()
 }
 
@@ -1938,6 +2086,63 @@ func (a *App) projectResourceList(_ []tabledata.Header, rows []tabledata.Row) ([
 		projectedRows = append(projectedRows, projectedRow)
 	}
 	return projectedHeaders, projectedRows
+}
+
+func (a *App) projectTemplateList(_ []tabledata.Header, rows []tabledata.Row) ([]tabledata.Header, []tabledata.Row) {
+	projectedHeaders := make([]tabledata.Header, 0, len(templateColumnOptions))
+	visibleFields := make([]string, 0, len(templateColumnOptions))
+	for _, option := range templateColumnOptions {
+		if !a.visibleTemplateColumns[option.Field] {
+			continue
+		}
+		projectedHeaders = append(projectedHeaders, option.Header)
+		visibleFields = append(visibleFields, option.Field)
+	}
+	if len(visibleFields) == 0 {
+		return render.TemplateListHeaders(), rows
+	}
+	projectedRows := make([]tabledata.Row, 0, len(rows))
+	for _, row := range rows {
+		fullRow := row
+		if templateValue, ok := row.Raw.(client.Template); ok {
+			fullRow = render.TemplateListRow(templateValue)
+			fullRow.SortKey["id"] = strings.ToLower(templateValue.ID)
+		}
+		fields := make([]string, 0, len(visibleFields))
+		for _, field := range visibleFields {
+			fields = append(fields, templateFieldValue(fullRow, field))
+		}
+		projectedRow := fullRow
+		projectedRow.Fields = fields
+		projectedRows = append(projectedRows, projectedRow)
+	}
+	return projectedHeaders, projectedRows
+}
+
+func templateFieldValue(row tabledata.Row, field string) string {
+	indexByField := map[string]int{
+		"name":               0,
+		"cloudResourceTypes": 1,
+		"description":        2,
+		"labels":             3,
+		"status":             4,
+		"abstract":           5,
+		"createdAt":          6,
+		"updatedAt":          7,
+		"entityName":         8,
+		"age":                9,
+	}
+	if field == "id" {
+		if row.ID == "" {
+			return "-"
+		}
+		return row.ID
+	}
+	index, ok := indexByField[field]
+	if !ok || index < 0 || index >= len(row.Fields) {
+		return "-"
+	}
+	return row.Fields[index]
 }
 
 func formatRefreshSeconds(seconds float64) string {

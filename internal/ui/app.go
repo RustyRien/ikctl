@@ -65,8 +65,10 @@ type detailHotkeys int
 
 const (
 	detailHotkeysDefault detailHotkeys = iota
+	detailHotkeysDetail
 	detailHotkeysAudit
 	detailHotkeysAuditDetail
+	detailHotkeysResourceOverview
 	detailHotkeysTemplateOverview
 )
 
@@ -338,6 +340,18 @@ func (a *App) SetAuditHeaderHotkeys() {
 func (a *App) SetAuditDetailHeaderHotkeys() {
 	a.header.SetAuditDetailHotkeys()
 	a.updateDetailHotkeys(detailHotkeysAuditDetail)
+}
+
+func (a *App) SetDetailHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetDetailHotkeys()
+	a.updateDetailHotkeys(detailHotkeysDetail)
+}
+
+func (a *App) SetResourceOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetResourceOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysResourceOverview)
 }
 
 func (a *App) SetTemplateOverviewHotkeys() {
@@ -766,10 +780,14 @@ func (a *App) updateDetailHotkeys(hotkeys detailHotkeys) {
 func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 	a.filterMenuMode = false
 	switch hotkeys {
+	case detailHotkeysDetail:
+		a.header.SetDetailHotkeys()
 	case detailHotkeysAudit:
 		a.header.SetAuditHotkeys()
 	case detailHotkeysAuditDetail:
 		a.header.SetAuditDetailHotkeys()
+	case detailHotkeysResourceOverview:
+		a.header.SetResourceOverviewHotkeys()
 	case detailHotkeysTemplateOverview:
 		a.header.SetTemplateOverviewHotkeys()
 	default:

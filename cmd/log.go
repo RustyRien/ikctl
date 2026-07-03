@@ -91,7 +91,7 @@ func runLog(cmd *cobra.Command, entity string, nameOrID string, sinceValue strin
 	}
 
 	historyCtx, historyCancel := context.WithTimeout(ctx, 20*time.Second)
-	historyLogs, _, err := cli.LogsForResource(historyCtx, resourceItem.ID, []int{0, initialLogHistoryLimit})
+	historyLogs, _, err := cli.LogsForEntity(historyCtx, resourceItem.ID, []int{0, initialLogHistoryLimit})
 	historyCancel()
 	if err != nil {
 		return err

@@ -92,9 +92,13 @@ const templatesQuery = `query ListTemplates($filter: JSON, $sort: [String!], $ra
     id
     name
     description
+    labels
+    status
+    abstract
     createdAt
     updatedAt
     cloudResourceTypes
+    entityName
   }
   templatesCount(filter: $filter)
 }`
@@ -173,9 +177,39 @@ const templateQuery = `query GetTemplate($id: UUID!) {
     id
     name
     description
+    documentation
+    template
     createdAt
     updatedAt
     cloudResourceTypes
+    labels
+    status
+    abstract
+    configuration
+    revisionNumber
+    resourcesCount
+    sourceCodeVersionsCount
+    entityName
+    creator {
+      id
+      identifier
+      email
+      displayName
+    }
+    parents {
+      id
+      name
+      abstract
+      cloudResourceTypes
+      entityName
+    }
+    children {
+      id
+      name
+      abstract
+      cloudResourceTypes
+      entityName
+    }
   }
 }`
 
@@ -555,21 +589,21 @@ func (c *Client) DeleteIntegration(ctx context.Context, id string) error {
 	return nil
 }
 
-func (c *Client) LogsForResource(ctx context.Context, resourceID string, pageRange []int) ([]Log, int, error) {
-	executionStart, err := c.latestExecutionStart(ctx, resourceID)
+func (c *Client) LogsForEntity(ctx context.Context, entityID string, pageRange []int) ([]Log, int, error) {
+	executionStart, err := c.latestExecutionStart(ctx, entityID)
 	if err != nil {
 		return nil, 0, err
 	}
 	if executionStart == 0 {
 		return nil, 0, nil
 	}
-	return c.LogsForAudit(ctx, resourceID, "", executionStart, pageRange)
+	return c.LogsForAudit(ctx, entityID, "", executionStart, pageRange)
 }
 
-func (c *Client) AuditLogsForResource(ctx context.Context, resourceID string, pageRange []int) ([]AuditLog, error) {
+func (c *Client) AuditLogsForEntity(ctx context.Context, entityID string, pageRange []int) ([]AuditLog, error) {
 	variables := map[string]any{
 		"filter": map[string]any{
-			"entity_id": resourceID,
+			"entity_id": entityID,
 		},
 		"sort": []string{"created_at", "DESC"},
 	}
@@ -586,6 +620,14 @@ func (c *Client) AuditLogsForResource(ctx context.Context, resourceID string, pa
 	}
 
 	return resp.AuditLogs, nil
+}
+
+func (c *Client) LogsForResource(ctx context.Context, resourceID string, pageRange []int) ([]Log, int, error) {
+	return c.LogsForEntity(ctx, resourceID, pageRange)
+}
+
+func (c *Client) AuditLogsForResource(ctx context.Context, resourceID string, pageRange []int) ([]AuditLog, error) {
+	return c.AuditLogsForEntity(ctx, resourceID, pageRange)
 }
 
 func (c *Client) LogsForAudit(ctx context.Context, resourceID string, auditLogID string, executionStart int, pageRange []int) ([]Log, int, error) {

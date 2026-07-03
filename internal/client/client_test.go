@@ -177,7 +177,7 @@ func TestResourceAndLogs(t *testing.T) {
 		t.Fatalf("resource = %#v", resource)
 	}
 
-	logs, total, err := client.LogsForResource(context.Background(), "r1", []int{0, 50})
+	logs, total, err := client.LogsForEntity(context.Background(), "r1", []int{0, 50})
 	if err != nil {
 		t.Fatalf("logs query: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestResourceAndLogs(t *testing.T) {
 		t.Fatalf("log = %#v", logs[0])
 	}
 
-	auditLogs, err := client.AuditLogsForResource(context.Background(), "r1", []int{0, 50})
+	auditLogs, err := client.AuditLogsForEntity(context.Background(), "r1", []int{0, 50})
 	if err != nil {
 		t.Fatalf("audit logs query: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestTemplateAndTree(t *testing.T) {
 
 		switch {
 		case strings.Contains(req.Query, "GetTemplate"):
-			fmt.Fprint(w, `{"data":{"template":{"id":"t1","name":"aws_redis","description":"Redis template","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","cloudResourceTypes":["redis"]}}}`)
+			fmt.Fprint(w, `{"data":{"template":{"id":"t1","name":"aws_redis","description":"Redis template","documentation":"https://example.invalid/docs","template":"resource \"aws_elasticache_cluster\" \"this\" {}","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","cloudResourceTypes":["redis"],"labels":["cache","prod"],"status":"ready","abstract":false,"configuration":{"tier":"backend"},"revisionNumber":3,"resourcesCount":7,"sourceCodeVersionsCount":2,"entityName":"template","creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"},"parents":[{"id":"tp1","name":"base_template","abstract":true,"cloudResourceTypes":["network"],"entityName":"template"}],"children":[{"id":"tc1","name":"redis_replica","abstract":false,"cloudResourceTypes":["redis"],"entityName":"template"}]}}}`)
 		case strings.Contains(req.Query, "TemplateTree"):
 			if req.Variables["id"] != "t1" {
 				t.Fatalf("template tree id = %#v", req.Variables["id"])
@@ -242,6 +242,9 @@ func TestTemplateAndTree(t *testing.T) {
 	}
 	if template == nil || template.Name != "aws_redis" {
 		t.Fatalf("template = %#v", template)
+	}
+	if template.Creator == nil || template.Creator.DisplayName != "Alice" || template.ResourcesCount != 7 || len(template.Parents) != 1 {
+		t.Fatalf("template details = %#v", template)
 	}
 
 	tree, err := client.TemplateTree(context.Background(), "t1", "children")

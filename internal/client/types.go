@@ -38,16 +38,37 @@ func (r Resource) GetName() string {
 }
 
 type Template struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name"`
-	Description        string    `json:"description"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
-	CloudResourceTypes []string  `json:"cloudResourceTypes"`
+	ID                      string              `json:"id"`
+	Name                    string              `json:"name"`
+	Description             string              `json:"description"`
+	Documentation           string              `json:"documentation"`
+	Template                string              `json:"template"`
+	CreatedAt               time.Time           `json:"createdAt"`
+	UpdatedAt               time.Time           `json:"updatedAt"`
+	CloudResourceTypes      []string            `json:"cloudResourceTypes"`
+	Labels                  []string            `json:"labels"`
+	Status                  string              `json:"status"`
+	Abstract                bool                `json:"abstract"`
+	Configuration           map[string]any      `json:"configuration"`
+	RevisionNumber          int                 `json:"revisionNumber"`
+	ResourcesCount          int                 `json:"resourcesCount"`
+	SourceCodeVersionsCount int                 `json:"sourceCodeVersionsCount"`
+	EntityName              string              `json:"entityName"`
+	Creator                 *Creator            `json:"creator"`
+	Parents                 []TemplateReference `json:"parents"`
+	Children                []TemplateReference `json:"children"`
 }
 
 func (t Template) GetName() string {
 	return t.Name
+}
+
+type TemplateReference struct {
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	Abstract           bool     `json:"abstract"`
+	CloudResourceTypes []string `json:"cloudResourceTypes"`
+	EntityName         string   `json:"entityName"`
 }
 
 type Workspace struct {

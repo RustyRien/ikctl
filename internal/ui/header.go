@@ -53,6 +53,20 @@ var auditDetailHeaderHints = headerHints{
 	},
 }
 
+var detailHeaderHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
+var resourceOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "t", label: "template"}, {key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
 var templateOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
@@ -136,6 +150,14 @@ func (h *Header) SetFilterMenuHotkeys() {
 
 func (h *Header) SetAuditDetailHotkeys() {
 	h.SetHotkeys(auditDetailHeaderHints)
+}
+
+func (h *Header) SetDetailHotkeys() {
+	h.SetHotkeys(detailHeaderHints)
+}
+
+func (h *Header) SetResourceOverviewHotkeys() {
+	h.SetHotkeys(resourceOverviewHints)
 }
 
 func (h *Header) SetTemplateOverviewHotkeys() {
