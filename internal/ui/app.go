@@ -26,7 +26,10 @@ type App struct {
 	detailHistory       []detailPage
 	filterMode          bool
 	filterMenuMode      bool
+	commandMode         bool
 	filterText          string
+	commandText         string
+	commandMatches      []string
 	config              config.Config
 	version             string
 	root                tview.Primitive
@@ -44,6 +47,8 @@ type App struct {
 	entitySelectorFn    func()
 	settingsFn          func()
 	toggleDestroyedFn   func()
+	commandFn           func(string)
+	commandSuggestFn    func(string) (string, []string)
 	overlayKeyFn        func(*tcell.EventKey) bool
 	detailKeyFn         func(*tcell.EventKey) bool
 	statusBase          string
@@ -259,6 +264,14 @@ func (a *App) SetToggleDestroyedFunc(fn func()) {
 	a.toggleDestroyedFn = fn
 }
 
+func (a *App) SetCommandFunc(fn func(string)) {
+	a.commandFn = fn
+}
+
+func (a *App) SetCommandSuggestFunc(fn func(string) (string, []string)) {
+	a.commandSuggestFn = fn
+}
+
 func (a *App) SetOverlayKeyFunc(fn func(*tcell.EventKey) bool) {
 	a.overlayKeyFn = fn
 }
@@ -272,6 +285,10 @@ func (a *App) SetEntityTitle(title string, emptyLabel string) {
 	a.table.Widget().SetTitle(title)
 	a.table.SetEmptyLabel(emptyLabel)
 	a.updateBreadcrumbs()
+}
+
+func (a *App) SelectedRow() (tabledata.Row, bool) {
+	return a.table.SelectedRow()
 }
 
 func (a *App) OpenOverlay(title string, text string) {
@@ -396,6 +413,49 @@ func (a *App) detailVisible() bool {
 }
 
 func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
+	if a.commandMode {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			a.commandMode = false
+			a.commandText = ""
+			a.commandMatches = nil
+			a.status.SetTitle("Status")
+			a.renderStatus()
+			return nil
+		case tcell.KeyEnter:
+			command := strings.TrimSpace(a.commandText)
+			a.commandMode = false
+			a.commandText = ""
+			a.commandMatches = nil
+			a.status.SetTitle("Status")
+			a.renderStatus()
+			if command != "" && a.commandFn != nil {
+				a.commandFn(command)
+			}
+			return nil
+		case tcell.KeyTAB:
+			if a.commandSuggestFn != nil {
+				a.commandText, a.commandMatches = a.commandSuggestFn(a.commandText)
+			}
+			a.renderStatus()
+			return nil
+		case tcell.KeyBackspace, tcell.KeyBackspace2:
+			if len(a.commandText) > 0 {
+				a.commandText = a.commandText[:len(a.commandText)-1]
+			}
+			a.commandMatches = nil
+			a.status.SetText(a.withLoadingSuffix(":" + a.commandText))
+			return nil
+		case tcell.KeyRune:
+			a.commandText += string(event.Rune())
+			a.commandMatches = nil
+			a.status.SetText(a.withLoadingSuffix(":" + a.commandText))
+			return nil
+		default:
+			return nil
+		}
+	}
+
 	if a.filterMode {
 		switch event.Key() {
 		case tcell.KeyEsc:
@@ -516,6 +576,11 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 		default:
 			return nil
 		}
+	}
+
+	if event.Key() == tcell.KeyRune && event.Rune() == ':' {
+		a.enterCommandMode()
+		return nil
 	}
 
 	if a.overlayVisible() {
@@ -658,6 +723,14 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 }
 
 func (a *App) renderStatus() {
+	if a.commandMode {
+		status := ":" + a.commandText
+		if len(a.commandMatches) > 0 {
+			status += "  Matches: " + strings.Join(a.commandMatches, ", ")
+		}
+		a.status.SetText(a.withLoadingSuffix(status))
+		return
+	}
 	if a.filterMode {
 		a.status.SetText(a.withLoadingSuffix("Filter: " + a.filterText))
 		return
@@ -797,6 +870,7 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 
 func (a *App) enterFilterMenuMode() {
 	a.filterMenuMode = true
+	a.commandMode = false
 	a.header.SetFilterMenuHotkeys()
 	a.status.SetTitle("Filters")
 	a.renderStatus()
@@ -806,6 +880,15 @@ func (a *App) exitFilterMenuMode() {
 	a.filterMenuMode = false
 	a.header.ResetHotkeys()
 	a.status.SetTitle("Status")
+	a.renderStatus()
+}
+
+func (a *App) enterCommandMode() {
+	a.commandMode = true
+	a.filterMenuMode = false
+	a.commandText = ""
+	a.commandMatches = nil
+	a.status.SetTitle("Command")
 	a.renderStatus()
 }
 

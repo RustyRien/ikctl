@@ -283,6 +283,9 @@ func (t *Table) filterRows() []tabledata.Row {
 }
 
 func (t *Table) render() {
+	currentRow, currentColumn := t.widget.GetSelection()
+	rowOffset, columnOffset := t.widget.GetOffset()
+	t.widget.SetSelectionChangedFunc(nil)
 	t.widget.Clear()
 
 	sortNumbers := map[int]int{}
@@ -333,9 +336,17 @@ func (t *Table) render() {
 	}
 
 	if len(t.filtered) == 0 {
+		t.widget.SetOffset(0, 0)
 		t.widget.SetCell(1, 0, tview.NewTableCell(t.emptyLabel).SetTextColor(colorInfo))
-	} else if currentRow, _ := t.widget.GetSelection(); currentRow <= 0 || currentRow > len(t.filtered) {
-		t.widget.Select(1, 0)
+	} else {
+		if currentRow <= 0 || currentRow > len(t.filtered) {
+			currentRow = 1
+			currentColumn = 0
+			rowOffset = 0
+			columnOffset = 0
+		}
+		t.widget.SetOffset(rowOffset, columnOffset)
+		t.widget.Select(currentRow, currentColumn)
 	}
 
 	t.widget.SetSelectedFunc(nil)
