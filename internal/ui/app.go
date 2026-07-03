@@ -47,6 +47,7 @@ type App struct {
 	entitySelectorFn    func()
 	settingsFn          func()
 	toggleDestroyedFn   func()
+	resetFiltersFn      func()
 	commandFn           func(string)
 	commandSuggestFn    func(string) (string, []string)
 	overlayKeyFn        func(*tcell.EventKey) bool
@@ -262,6 +263,10 @@ func (a *App) SetSettingsFunc(fn func()) {
 
 func (a *App) SetToggleDestroyedFunc(fn func()) {
 	a.toggleDestroyedFn = fn
+}
+
+func (a *App) SetResetFiltersFunc(fn func()) {
+	a.resetFiltersFn = fn
 }
 
 func (a *App) SetCommandFunc(fn func(string)) {
@@ -512,6 +517,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 					a.toggleDestroyedFn()
 				}
 				return nil
+			case 'c':
+				a.exitFilterMenuMode()
+				if a.resetFiltersFn != nil {
+					a.resetFiltersFn()
+				}
+				return nil
 			case 'q':
 				a.exitFilterMenuMode()
 				return nil
@@ -692,6 +703,11 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 		case 'f':
 			a.enterFilterMenuMode()
 			return nil
+		case 'c':
+			if a.resetFiltersFn != nil {
+				a.resetFiltersFn()
+				return nil
+			}
 		case 'r':
 			if a.refreshFn != nil {
 				a.refreshFn()
@@ -736,7 +752,7 @@ func (a *App) renderStatus() {
 		return
 	}
 	if a.filterMenuMode {
-		a.status.SetText(a.withLoadingSuffix("Choose filter: i integration, t template, d hide destroyed  Esc back"))
+		a.status.SetText(a.withLoadingSuffix("Choose filter: i integration, t template, d hide destroyed, c reset all  Esc back"))
 		return
 	}
 	if a.table.SortMode() {

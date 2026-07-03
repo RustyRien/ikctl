@@ -64,6 +64,16 @@ func (a *App) toggleHideDestroyedResources() {
 	a.applyResourceFilters()
 }
 
+func (a *App) resetAllResourceFilters() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+	a.resourceTemplateFilter = nil
+	a.resourceIntegrationFilter = nil
+	a.hideDestroyedResources = false
+	a.applyResourceFilters()
+}
+
 func (a *App) openTemplateFilter() {
 	if a.activeKind != model.EntityResources {
 		return
@@ -241,6 +251,7 @@ func (a *App) applyResourceFilters() {
 		return
 	}
 	filter := a.resourceFilters()
+	a.saveViewPreferences()
 	if !resourcesModel.SetFilter(filter) {
 		a.renderCurrentModel()
 		return
@@ -365,6 +376,7 @@ func (a *App) toggleSelectedResourceColumn() {
 	table.Select(selectedRow, 0)
 	a.resourceColumnsTable = table
 	a.ui.OpenOverlayPrimitive("Resource Columns", primitive)
+	a.saveViewPreferences()
 	a.renderCurrentModel()
 }
 

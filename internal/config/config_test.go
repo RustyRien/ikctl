@@ -118,3 +118,51 @@ func TestSavePersistsSettings(t *testing.T) {
 		t.Fatalf("expected show breadcrumbs false after reload")
 	}
 }
+
+func TestSavePersistsTUIViewPreferences(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	cfg := Config{
+		Endpoint:         "https://example.com",
+		RefreshInterval:  2 * time.Second,
+		RefreshSeconds:   2,
+		AutoRefresh:      true,
+		DefaultSortOrder: "desc",
+		ShowBreadcrumbs:  true,
+		ConfigPath:       path,
+		View: ViewConfig{
+			Resources: ResourceViewConfig{
+				Columns:           []string{"name", "status", "age"},
+				TemplateFilter:    FilterRef{ID: "tpl-1", Name: "base-template"},
+				IntegrationFilter: FilterRef{ID: "int-1", Name: "aws"},
+				HideDestroyed:     true,
+			},
+			Templates: TemplateViewConfig{
+				Columns: []string{"name", "updatedAt", "age"},
+			},
+		},
+	}
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	reloaded, err := Load(FlagOverrides{ConfigPath: path})
+	if err != nil {
+		t.Fatalf("reload config: %v", err)
+	}
+	if got := reloaded.View.Resources.Columns; len(got) != 3 || got[0] != "name" || got[1] != "status" || got[2] != "age" {
+		t.Fatalf("unexpected resource columns: %#v", got)
+	}
+	if reloaded.View.Resources.TemplateFilter.ID != "tpl-1" || reloaded.View.Resources.TemplateFilter.Name != "base-template" {
+		t.Fatalf("unexpected template filter: %#v", reloaded.View.Resources.TemplateFilter)
+	}
+	if reloaded.View.Resources.IntegrationFilter.ID != "int-1" || reloaded.View.Resources.IntegrationFilter.Name != "aws" {
+		t.Fatalf("unexpected integration filter: %#v", reloaded.View.Resources.IntegrationFilter)
+	}
+	if !reloaded.View.Resources.HideDestroyed {
+		t.Fatalf("expected hide destroyed true after reload")
+	}
+	if got := reloaded.View.Templates.Columns; len(got) != 3 || got[0] != "name" || got[1] != "updatedAt" || got[2] != "age" {
+		t.Fatalf("unexpected template columns: %#v", got)
+	}
+}

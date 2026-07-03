@@ -24,7 +24,8 @@ var defaultHeaderHints = headerHints{
 	},
 	filters: [][]menuHint{
 		{{key: "/", label: "search"}, {key: "f", label: "filters"}},
-		{{key: "v", label: "columns"}, {key: ":", label: "command"}},
+		{{key: "c", label: "reset"}, {key: "v", label: "columns"}},
+		{{key: ":", label: "command"}},
 	},
 }
 
@@ -34,6 +35,7 @@ var filterMenuHeaderHints = headerHints{
 		{{key: "i", label: "integration"}},
 		{{key: "t", label: "template"}},
 		{{key: "d", label: "hide destroyed"}},
+		{{key: "c", label: "reset all"}},
 		{{key: "esc", label: "back"}},
 	},
 }

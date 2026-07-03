@@ -109,6 +109,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	}
 	app.visibleResourceColumns = defaultVisibleResourceColumns()
 	app.visibleTemplateColumns = defaultVisibleTemplateColumns()
+	app.applySavedViewPreferences()
 
 	ordered := registry.Ordered()
 	for index, descriptor := range ordered {
@@ -119,6 +120,9 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 		if index == 0 {
 			app.activeKind = kind
 		}
+	}
+	if resourcesModel := app.models[model.EntityResources]; resourcesModel != nil {
+		resourcesModel.SetFilter(app.resourceFilters())
 	}
 	if kind, ok := app.kindByName[activeEntity]; ok {
 		app.activeKind = kind
@@ -135,6 +139,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetIntegrationFilterFunc(app.openIntegrationFilter)
 	ui.SetResourceColumnsFunc(app.openColumns)
 	ui.SetToggleDestroyedFunc(app.toggleHideDestroyedResources)
+	ui.SetResetFiltersFunc(app.resetAllResourceFilters)
 	ui.SetCommandFunc(app.runCommand)
 	ui.SetCommandSuggestFunc(app.suggestCommand)
 	ui.SetEntitySelectorFunc(app.openEntitySelector)
@@ -148,6 +153,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 
 func (a *App) Run() error {
 	defer a.cancel()
+	a.renderCurrentModel()
 	a.loadCurrentUser()
 	a.refreshInitial()
 	go a.loop()

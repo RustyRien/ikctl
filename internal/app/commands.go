@@ -17,6 +17,7 @@ var availableCommands = []string{
 	"open",
 	"q",
 	"refresh",
+	"reset-filters",
 	"resources",
 	"settings",
 	"template-filter",
@@ -71,6 +72,8 @@ func (a *App) runCommand(input string) {
 		a.openIntegrationFilter()
 	case "destroyed", "hide-destroyed":
 		a.toggleHideDestroyedResources()
+	case "reset-filters", "clear-filters", "filters-reset":
+		a.resetAllResourceFilters()
 	default:
 		a.commandError(input, fmt.Sprintf("Unknown command: %s", input))
 	}
@@ -114,7 +117,7 @@ func (a *App) suggestCommand(input string) (string, []string) {
 }
 
 func (a *App) commandError(command string, message string) {
-	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :templates\n  :integrations\n  :refresh\n  :settings\n  :columns\n  :entity\n  :open\n  :logs\n  :audit\n  :template-filter\n  :integration-filter\n  :destroyed", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
+	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :templates\n  :integrations\n  :refresh\n  :settings\n  :columns\n  :entity\n  :open\n  :logs\n  :audit\n  :template-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
 	a.ui.OpenOverlayPrimitive("Command", view)
 }
 

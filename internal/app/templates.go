@@ -173,6 +173,7 @@ func (a *App) toggleSelectedTemplateColumn() {
 	table.Select(selectedRow, 0)
 	a.templateColumnsTable = table
 	a.ui.OpenOverlayPrimitive("Template Columns", primitive)
+	a.saveViewPreferences()
 	a.renderCurrentModel()
 }
 

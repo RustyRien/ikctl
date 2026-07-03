@@ -29,18 +29,41 @@ type Config struct {
 	ShowBreadcrumbs    bool          `yaml:"show_breadcrumbs"`
 	InsecureSkipVerify bool          `yaml:"insecure_skip_tls_verify"`
 	NoColors           bool          `yaml:"no_colors"`
+	View               ViewConfig    `yaml:"-"`
 	ConfigPath         string        `yaml:"-"`
 }
 
+type ViewConfig struct {
+	Resources ResourceViewConfig `yaml:"resources,omitempty"`
+	Templates TemplateViewConfig `yaml:"templates,omitempty"`
+}
+
+type ResourceViewConfig struct {
+	Columns           []string  `yaml:"columns,omitempty"`
+	TemplateFilter    FilterRef `yaml:"template_filter,omitempty"`
+	IntegrationFilter FilterRef `yaml:"integration_filter,omitempty"`
+	HideDestroyed     bool      `yaml:"hide_destroyed,omitempty"`
+}
+
+type TemplateViewConfig struct {
+	Columns []string `yaml:"columns,omitempty"`
+}
+
+type FilterRef struct {
+	ID   string `yaml:"id,omitempty"`
+	Name string `yaml:"name,omitempty"`
+}
+
 type fileConfig struct {
-	Endpoint           string  `yaml:"endpoint"`
-	Token              string  `yaml:"token"`
-	RefreshSeconds     float64 `yaml:"refresh_seconds"`
-	AutoRefresh        *bool   `yaml:"auto_refresh,omitempty"`
-	DefaultSortOrder   string  `yaml:"default_sort_order,omitempty"`
-	ShowBreadcrumbs    *bool   `yaml:"show_breadcrumbs,omitempty"`
-	InsecureSkipVerify bool    `yaml:"insecure_skip_tls_verify"`
-	NoColors           bool    `yaml:"no_colors"`
+	Endpoint           string      `yaml:"endpoint"`
+	Token              string      `yaml:"token"`
+	RefreshSeconds     float64     `yaml:"refresh_seconds"`
+	AutoRefresh        *bool       `yaml:"auto_refresh,omitempty"`
+	DefaultSortOrder   string      `yaml:"default_sort_order,omitempty"`
+	ShowBreadcrumbs    *bool       `yaml:"show_breadcrumbs,omitempty"`
+	InsecureSkipVerify bool        `yaml:"insecure_skip_tls_verify"`
+	NoColors           bool        `yaml:"no_colors"`
+	TUI                *ViewConfig `yaml:"tui,omitempty"`
 }
 
 type FlagOverrides struct {
@@ -139,6 +162,9 @@ func loadFile(cfg *Config, path string) error {
 	}
 	cfg.InsecureSkipVerify = fileCfg.InsecureSkipVerify
 	cfg.NoColors = fileCfg.NoColors
+	if fileCfg.TUI != nil {
+		cfg.View = *fileCfg.TUI
+	}
 
 	return nil
 }
@@ -233,6 +259,10 @@ func (c *Config) Save() error {
 		InsecureSkipVerify: c.InsecureSkipVerify,
 		NoColors:           c.NoColors,
 	}
+	if !c.View.Empty() {
+		view := c.View
+		fileCfg.TUI = &view
+	}
 
 	data, err := yaml.Marshal(fileCfg)
 	if err != nil {
@@ -248,4 +278,20 @@ func (c *Config) Save() error {
 
 func (c Config) DefaultSortDescending() bool {
 	return c.DefaultSortOrder != "asc"
+}
+
+func (v ViewConfig) Empty() bool {
+	return v.Resources.Empty() && v.Templates.Empty()
+}
+
+func (v ResourceViewConfig) Empty() bool {
+	return len(v.Columns) == 0 && v.TemplateFilter.Empty() && v.IntegrationFilter.Empty() && !v.HideDestroyed
+}
+
+func (v TemplateViewConfig) Empty() bool {
+	return len(v.Columns) == 0
+}
+
+func (v FilterRef) Empty() bool {
+	return v.ID == "" && v.Name == ""
 }
