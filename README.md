@@ -63,6 +63,9 @@ go run . logout
 go run . disable integrations aws-prod
 go run . enable integrations aws-prod
 go run . delete integrations aws-prod
+go run . disable templates aws_redis
+go run . enable templates aws_redis
+go run . delete templates aws_redis
 ```
 
 ## Config
@@ -101,6 +104,9 @@ Precedence: flags > env > config file > defaults.
 - `ikctl disable integrations <name-or-id>` sends a disable action for an integration.
 - `ikctl enable integrations <name-or-id>` sends an enable action for an integration.
 - `ikctl delete integrations <name-or-id>` deletes an integration.
+- `ikctl disable templates <name-or-id>` sends a disable action for a template.
+- `ikctl enable templates <name-or-id>` sends an enable action for a template.
+- `ikctl delete templates <name-or-id>` deletes a template.
 - Supported entities: `resources`, `templates`, `integrations`.
 - Output formats: `table`, `wide`, `json`, `yaml`, `name`.
 - Common flags: `-o`, `--sort`, `--sort-order`, `--limit`, `--filter key=value`.

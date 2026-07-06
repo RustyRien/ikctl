@@ -31,6 +31,7 @@ func (r *TemplateRenderer) Headers() []tabledata.Header {
 	return []tabledata.Header{
 		{Title: "NAME", Key: "name", SortField: "name"},
 		{Title: "CLOUD TYPES", Key: "cloud_types"},
+		{Title: "STATUS", Key: "status", SortField: "status"},
 		{Title: "UPDATED", Key: "updated", SortField: "updated_at"},
 		{Title: "AGE", Key: "age", SortField: "created_at"},
 	}
@@ -41,12 +42,14 @@ func (r *TemplateRenderer) Row(template client.Template) tabledata.Row {
 	row.Fields = []string{
 		row.Fields[0],
 		row.Fields[1],
+		row.Fields[4],
 		row.Fields[7],
 		row.Fields[9],
 	}
 	row.SortKey = map[string]string{
 		"name":        row.SortKey["name"],
 		"cloud_types": row.SortKey["cloudResourceTypes"],
+		"status":      row.SortKey["status"],
 		"updated":     row.SortKey["updatedAt"],
 		"age":         row.SortKey["age"],
 	}

@@ -218,6 +218,10 @@ type integrationActionMutationData struct {
 	IntegrationAction *entityActionResult `json:"integrationAction"`
 }
 
+type templateActionMutationData struct {
+	TemplateAction *entityActionResult `json:"templateAction"`
+}
+
 type refreshAuthTokenMutationData struct {
 	RefreshAuthToken *RefreshAuthTokenResult `json:"refreshAuthToken"`
 }
@@ -228,6 +232,10 @@ type logoutMutationData struct {
 
 type deleteIntegrationMutationData struct {
 	DeleteIntegration bool `json:"deleteIntegration"`
+}
+
+type deleteTemplateMutationData struct {
+	DeleteTemplate bool `json:"deleteTemplate"`
 }
 
 type logsQueryData struct {

@@ -317,3 +317,49 @@ func TestIntegrationActions(t *testing.T) {
 		t.Fatalf("delete integration: %v", err)
 	}
 }
+
+func TestTemplateActions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "GetTemplate"):
+			fmt.Fprint(w, `{"data":{"template":{"id":"t1","name":"aws_redis","description":"Redis","documentation":"https://example.invalid/docs","template":"resource {}","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","cloudResourceTypes":["redis"],"labels":["cache"],"status":"ready","abstract":false,"configuration":{},"revisionNumber":3,"resourcesCount":7,"sourceCodeVersionsCount":2,"entityName":"template","creator":null,"parents":[],"children":[]}}}`)
+		case strings.Contains(req.Query, "TemplateAction"):
+			input, _ := req.Variables["input"].(map[string]any)
+			action := input["action"]
+			if req.Variables["id"] != "t1" {
+				t.Fatalf("action id = %#v", req.Variables["id"])
+			}
+			if action != "enable" && action != "disable" {
+				t.Fatalf("unexpected action = %#v", action)
+			}
+			fmt.Fprintf(w, `{"data":{"templateAction":{"id":"t1","entityName":"template","status":"%s"}}}`, action)
+		case strings.Contains(req.Query, "DeleteTemplate"):
+			if req.Variables["id"] != "t1" {
+				t.Fatalf("delete id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"deleteTemplate":true}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	if err := client.EnableTemplate(context.Background(), "t1"); err != nil {
+		t.Fatalf("enable template: %v", err)
+	}
+	if err := client.DisableTemplate(context.Background(), "t1"); err != nil {
+		t.Fatalf("disable template: %v", err)
+	}
+	if err := client.DeleteTemplate(context.Background(), "t1"); err != nil {
+		t.Fatalf("delete template: %v", err)
+	}
+}

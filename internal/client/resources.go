@@ -1,6 +1,9 @@
 package client
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 const resourcesQuery = `query ListResources($filter: JSON, $sort: [String!], $range: [Int!]) {
   resources(filter: $filter, sort: $sort, range: $range) {
@@ -231,6 +234,18 @@ const templateTreeQuery = `query TemplateTree($id: UUID!, $direction: String!) {
   }
 }`
 
+const templateActionMutation = `mutation TemplateAction($id: UUID!, $input: TemplateActionInput!) {
+  templateAction(id: $id, input: $input) {
+    id
+    entityName
+    status
+  }
+}`
+
+const deleteTemplateMutation = `mutation DeleteTemplate($id: UUID!) {
+  deleteTemplate(id: $id)
+}`
+
 const resourceTreeQuery = `query ResourceTree($id: UUID!, $direction: String!) {
   resourceTree(id: $id, direction: $direction) {
     id
@@ -342,6 +357,30 @@ func (c *Client) TemplateTree(ctx context.Context, id string, direction string) 
 	return resp.TemplateTree, nil
 }
 
+func (c *Client) EnableTemplate(ctx context.Context, id string) error {
+	return c.templateAction(ctx, id, "enable")
+}
+
+func (c *Client) DisableTemplate(ctx context.Context, id string) error {
+	return c.templateAction(ctx, id, "disable")
+}
+
+func (c *Client) DeleteTemplate(ctx context.Context, id string) error {
+	resp, err := query[deleteTemplateMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: deleteTemplateMutation,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.DeleteTemplate {
+		return errors.New("template delete failed")
+	}
+	return nil
+}
+
 func (c *Client) ResourceTree(ctx context.Context, id string, direction string) (*ResourceTreeNode, error) {
 	resp, err := query[resourceTreeQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: resourceTreeQuery,
@@ -354,6 +393,19 @@ func (c *Client) ResourceTree(ctx context.Context, id string, direction string) 
 		return nil, err
 	}
 	return resp.ResourceTree, nil
+}
+
+func (c *Client) templateAction(ctx context.Context, id string, action string) error {
+	_, err := query[templateActionMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: templateActionMutation,
+		Variables: map[string]any{
+			"id": id,
+			"input": map[string]any{
+				"action": action,
+			},
+		},
+	})
+	return err
 }
 
 func listVariables(filter map[string]any, sort []string, pageRange []int) map[string]any {
