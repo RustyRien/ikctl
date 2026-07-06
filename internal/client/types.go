@@ -191,6 +191,20 @@ type templateTreeQueryData struct {
 	TemplateTree *TemplateTreeNode `json:"templateTree"`
 }
 
+type ResourceTreeNode struct {
+	ID           string             `json:"id"`
+	NodeID       string             `json:"nodeId"`
+	Name         string             `json:"name"`
+	State        string             `json:"state"`
+	Status       string             `json:"status"`
+	TemplateName string             `json:"templateName"`
+	Children     []ResourceTreeNode `json:"children"`
+}
+
+type resourceTreeQueryData struct {
+	ResourceTree *ResourceTreeNode `json:"resourceTree"`
+}
+
 type integrationsQueryData struct {
 	Integrations      []Integration `json:"integrations"`
 	IntegrationsCount int           `json:"integrationsCount"`

@@ -363,10 +363,68 @@ func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]fun
 			)
 		}
 	}
+	jumpActions['y'] = func() {
+		a.openResourceTree(resource.ID, valueOr(resource.Name, resource.ID))
+	}
 	if len(jumpActions) == 0 {
 		return nil
 	}
 	return jumpActions
+}
+
+func (a *App) openResourceTree(id string, name string) {
+	title := fmt.Sprintf("Resource Tree: %s", name)
+	a.auditLogRows = nil
+	a.auditLogTable = nil
+	a.overviewTree = nil
+	a.ui.OpenOverlay(title, "Loading resource tree...")
+
+	go func() {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		tree, err := a.client.ResourceTree(ctx, id, "children")
+		var primitive tview.Primitive
+		var treeSelection *overviewTreeSelection
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load resource tree.\n\n%v", err))
+		} else if tree != nil {
+			var treeView *tview.TreeView
+			primitive, treeView = overviewTreeView("Tree View", resourceTreeNode(*tree), "Enter open resource  Esc/q close")
+			treeSelection = &overviewTreeSelection{view: treeView, onSelect: func(reference any) {
+				selection, ok := reference.(client.ResourceTreeNode)
+				if !ok || selection.ID == "" {
+					return
+				}
+				a.openResourceOverview(client.Resource{ID: selection.ID, Name: valueOr(selection.Name, selection.ID)})
+			}}
+		} else {
+			primitive = errorView("Resource tree not found")
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.overviewTree = treeSelection
+			a.ui.OpenOverlayPrimitive(title, primitive)
+		})
+	}()
+}
+
+func (a *App) openSelectedOverviewTreeNode() {
+	if a.overviewTree == nil || a.overviewTree.view == nil || a.overviewTree.onSelect == nil {
+		return
+	}
+	node := a.overviewTree.view.GetCurrentNode()
+	if node == nil {
+		return
+	}
+	reference := node.GetReference()
+	selection := a.overviewTree
+	a.overviewTree = nil
+	a.ui.CloseOverlay()
+	selection.onSelect(reference)
 }
 
 func (a *App) openResourceColumns() {
@@ -775,6 +833,7 @@ func resourceTemplateHint(resource client.Resource) string {
 	if resource.Template != nil && resource.Template.ID != "" {
 		hints = append(hints, "t template")
 	}
+	hints = append(hints, "y tree")
 	if len(resource.Integrations) > 0 {
 		hints = append(hints, "i integrations")
 	}

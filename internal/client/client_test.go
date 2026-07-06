@@ -228,6 +228,14 @@ func TestTemplateAndTree(t *testing.T) {
 				t.Fatalf("template tree direction = %#v", req.Variables["direction"])
 			}
 			fmt.Fprint(w, `{"data":{"templateTree":{"id":"t1","nodeId":"t1","name":"aws_redis","status":"ready","children":[{"id":"t2","nodeId":"t2","name":"aws_redis_cache","status":"ready","children":[]}]}}}`)
+		case strings.Contains(req.Query, "ResourceTree"):
+			if req.Variables["id"] != "r1" {
+				t.Fatalf("resource tree id = %#v", req.Variables["id"])
+			}
+			if req.Variables["direction"] != "children" {
+				t.Fatalf("resource tree direction = %#v", req.Variables["direction"])
+			}
+			fmt.Fprint(w, `{"data":{"resourceTree":{"id":"r1","nodeId":"r1","name":"redis-prod","state":"provisioned","status":"ready","templateName":"aws_redis","children":[{"id":"r2","nodeId":"r2","name":"redis-replica","state":"provisioned","status":"ready","templateName":"aws_redis_replica","children":[]}]}}}`)
 		default:
 			t.Fatalf("unexpected query: %s", req.Query)
 		}
@@ -253,6 +261,14 @@ func TestTemplateAndTree(t *testing.T) {
 	}
 	if tree == nil || tree.Name != "aws_redis" || len(tree.Children) != 1 || tree.Children[0].Name != "aws_redis_cache" {
 		t.Fatalf("tree = %#v", tree)
+	}
+
+	resourceTree, err := client.ResourceTree(context.Background(), "r1", "children")
+	if err != nil {
+		t.Fatalf("resource tree query: %v", err)
+	}
+	if resourceTree == nil || resourceTree.Name != "redis-prod" || len(resourceTree.Children) != 1 || resourceTree.Children[0].Name != "redis-replica" {
+		t.Fatalf("resourceTree = %#v", resourceTree)
 	}
 }
 

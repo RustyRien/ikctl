@@ -65,8 +65,8 @@ var detailHeaderHints = headerHints{
 var resourceOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-		{{key: "t", label: "template"}, {key: "i", label: "integrations"}, {key: "esc", label: "back"}},
-		{{key: "q", label: "back"}},
+		{{key: "t", label: "template"}, {key: "y", label: "tree"}, {key: "i", label: "integrations"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }
 

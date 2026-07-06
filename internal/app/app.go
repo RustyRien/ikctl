@@ -70,7 +70,7 @@ type App struct {
 	auditLogTable             *tview.Table
 	entitySelectorTable       *tview.Table
 	settingsTable             *tview.Table
-	templateTree              *tview.TreeView
+	overviewTree              *overviewTreeSelection
 	templateFilterAllRows     []client.Template
 	templateFilterRows        []client.Template
 	templateFilterTable       *tview.Table
@@ -451,20 +451,20 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 		return false
 	}
 
-	if a.templateTree != nil {
+	if a.overviewTree != nil {
 		switch event.Key() {
 		case tcell.KeyEnter:
-			a.openSelectedTemplateTreeNode()
+			a.openSelectedOverviewTreeNode()
 			return true
 		case tcell.KeyEsc:
-			a.templateTree = nil
+			a.overviewTree = nil
 			return false
 		case tcell.KeyCtrlD, tcell.KeyCtrlU:
 			return false
 		case tcell.KeyRune:
 			switch event.Rune() {
 			case 'q':
-				a.templateTree = nil
+				a.overviewTree = nil
 				return false
 			}
 		}
@@ -478,7 +478,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			return true
 		case tcell.KeyEsc:
 			a.entitySelectorTable = nil
-			a.templateTree = nil
+			a.overviewTree = nil
 			return false
 		case tcell.KeyCtrlD, tcell.KeyCtrlU:
 			return false
@@ -596,7 +596,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			a.integrationFilterTable = nil
 			a.integrationFilterQuery = ""
 			a.integrationFilterMode = false
-			a.templateTree = nil
+			a.overviewTree = nil
 			return false
 		case tcell.KeyCtrlD, tcell.KeyCtrlU:
 			return false
@@ -615,7 +615,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				a.integrationFilterTable = nil
 				a.integrationFilterQuery = ""
 				a.integrationFilterMode = false
-				a.templateTree = nil
+				a.overviewTree = nil
 				return false
 			}
 		}
@@ -655,7 +655,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			a.templateFilterTable = nil
 			a.templateFilterQuery = ""
 			a.templateFilterMode = false
-			a.templateTree = nil
+			a.overviewTree = nil
 			return false
 		case tcell.KeyCtrlD, tcell.KeyCtrlU:
 			return false
@@ -674,7 +674,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				a.templateFilterTable = nil
 				a.templateFilterQuery = ""
 				a.templateFilterMode = false
-				a.templateTree = nil
+				a.overviewTree = nil
 				return false
 			}
 		}
@@ -694,7 +694,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.auditLogRows = nil
 				a.auditLogTable = nil
-				a.templateTree = nil
+				a.overviewTree = nil
 				return false
 			}
 		}

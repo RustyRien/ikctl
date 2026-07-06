@@ -81,7 +81,7 @@ func (a *App) openTemplateTree(id string, name string) {
 	title := fmt.Sprintf("Template Tree: %s", name)
 	a.auditLogRows = nil
 	a.auditLogTable = nil
-	a.templateTree = nil
+	a.overviewTree = nil
 	a.ui.OpenOverlay(title, "Loading template tree...")
 
 	go func() {
@@ -93,38 +93,28 @@ func (a *App) openTemplateTree(id string, name string) {
 
 		tree, err := a.client.TemplateTree(ctx, id, "children")
 		var primitive tview.Primitive
-		var treeView *tview.TreeView
+		var treeSelection *overviewTreeSelection
 		if err != nil {
 			primitive = errorView(fmt.Sprintf("Failed to load template tree.\n\n%v", err))
 		} else if tree != nil {
-			primitive, treeView = templateTreeView(*tree)
+			var treeView *tview.TreeView
+			primitive, treeView = overviewTreeView("Tree View", templateTreeNode(*tree), "Enter open template  Esc/q close")
+			treeSelection = &overviewTreeSelection{view: treeView, onSelect: func(reference any) {
+				selection, ok := reference.(client.TemplateTreeNode)
+				if !ok || selection.ID == "" {
+					return
+				}
+				a.openTemplateOverview(selection.ID, valueOr(selection.Name, selection.ID))
+			}}
 		} else {
 			primitive = errorView("Template tree not found")
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
-			a.templateTree = treeView
+			a.overviewTree = treeSelection
 			a.ui.OpenOverlayPrimitive(title, primitive)
 		})
 	}()
-}
-
-func (a *App) openSelectedTemplateTreeNode() {
-	if a.templateTree == nil {
-		return
-	}
-	node := a.templateTree.GetCurrentNode()
-	if node == nil {
-		return
-	}
-	reference := node.GetReference()
-	selection, ok := reference.(client.TemplateTreeNode)
-	if !ok || selection.ID == "" {
-		return
-	}
-	a.templateTree = nil
-	a.ui.CloseOverlay()
-	a.openTemplateOverview(selection.ID, valueOr(selection.Name, selection.ID))
 }
 
 func (a *App) openTemplateColumns() {
@@ -135,7 +125,7 @@ func (a *App) openTemplateColumns() {
 	a.auditLogTable = nil
 	a.entitySelectorTable = nil
 	a.settingsTable = nil
-	a.templateTree = nil
+	a.overviewTree = nil
 	a.resourceColumnsTable = nil
 	primitive, table := resourceColumnsView(templateColumnOptions, a.visibleTemplateColumns)
 	a.templateColumnsTable = table
@@ -254,43 +244,4 @@ func templateOverviewView(template client.Template) tview.Primitive {
 	root.AddItem(description, 0, 1, false)
 	root.AddItem(overviewFooter("t tree view  Esc/q close"), 1, 0, false)
 	return root
-}
-
-func templateTreeView(tree client.TemplateTreeNode) (tview.Primitive, *tview.TreeView) {
-	view := tview.NewTreeView()
-	view.SetBorder(true)
-	view.SetTitle("Tree View")
-	root := buildTemplateTreeNode(tree)
-	root.SetExpanded(true)
-	expandTemplateTree(root)
-	view.SetRoot(root)
-	view.SetCurrentNode(root)
-
-	container := tview.NewFlex().SetDirection(tview.FlexRow)
-	container.AddItem(view, 0, 1, true)
-	container.AddItem(overviewFooter("Enter open template  Esc/q close"), 1, 0, false)
-	return container, view
-}
-
-func buildTemplateTreeNode(node client.TemplateTreeNode) *tview.TreeNode {
-	label := node.Name
-	if node.Status != "" {
-		label = fmt.Sprintf("%s [%s]", node.Name, node.Status)
-	}
-	treeNode := tview.NewTreeNode(label)
-	treeNode.SetReference(node)
-	for _, child := range node.Children {
-		treeNode.AddChild(buildTemplateTreeNode(child))
-	}
-	return treeNode
-}
-
-func expandTemplateTree(node *tview.TreeNode) {
-	if node == nil {
-		return
-	}
-	node.SetExpanded(true)
-	for _, child := range node.GetChildren() {
-		expandTemplateTree(child)
-	}
 }

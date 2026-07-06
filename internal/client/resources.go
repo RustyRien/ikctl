@@ -231,6 +231,49 @@ const templateTreeQuery = `query TemplateTree($id: UUID!, $direction: String!) {
   }
 }`
 
+const resourceTreeQuery = `query ResourceTree($id: UUID!, $direction: String!) {
+  resourceTree(id: $id, direction: $direction) {
+    id
+    nodeId
+    name
+    state
+    status
+    templateName
+    children {
+      id
+      nodeId
+      name
+      state
+      status
+      templateName
+      children {
+        id
+        nodeId
+        name
+        state
+        status
+        templateName
+        children {
+          id
+          nodeId
+          name
+          state
+          status
+          templateName
+          children {
+            id
+            nodeId
+            name
+            state
+            status
+            templateName
+          }
+        }
+      }
+    }
+  }
+}`
+
 func (c *Client) Resources(ctx context.Context, filter map[string]any, sort []string, pageRange []int) (ResourcesResult, error) {
 	variables := listVariables(filter, sort, pageRange)
 
@@ -297,6 +340,20 @@ func (c *Client) TemplateTree(ctx context.Context, id string, direction string) 
 		return nil, err
 	}
 	return resp.TemplateTree, nil
+}
+
+func (c *Client) ResourceTree(ctx context.Context, id string, direction string) (*ResourceTreeNode, error) {
+	resp, err := query[resourceTreeQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: resourceTreeQuery,
+		Variables: map[string]any{
+			"id":        id,
+			"direction": direction,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.ResourceTree, nil
 }
 
 func listVariables(filter map[string]any, sort []string, pageRange []int) map[string]any {
