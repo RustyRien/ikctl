@@ -13,6 +13,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 	title := fmt.Sprintf("Integration: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeIntegrationDetail = &entityDetailSelection{ID: id, Name: name, Kind: "integrations"}
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading integration overview...")
@@ -30,8 +31,10 @@ func (a *App) openIntegrationOverview(id string, name string) {
 		if err != nil {
 			primitive = errorView(fmt.Sprintf("Failed to load integration overview.\n\n%v", err))
 		} else if full != nil {
+			a.activeIntegrationDetail = &entityDetailSelection{ID: full.ID, Name: full.Name, Kind: "integrations"}
 			primitive = integrationOverviewView(*full)
 		} else {
+			a.activeIntegrationDetail = nil
 			primitive = errorView("Integration not found")
 		}
 

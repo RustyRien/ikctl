@@ -48,6 +48,20 @@ type auditLogSelection struct {
 	Creator        string
 }
 
+type entityDetailSelection struct {
+	ID   string
+	Name string
+	Kind string
+}
+
+type entityActionPrompt struct {
+	Verb   string
+	Kind   string
+	ID     string
+	Name   string
+	Action func(context.Context) error
+}
+
 var logLevelPrefixRX = regexp.MustCompile(`(?i)^\[(trace|debug|info|warn|warning|error|fatal)\]\s*`)
 
 type App struct {
@@ -89,6 +103,8 @@ type App struct {
 	resourceIntegrationFilter *client.Integration
 	hideDestroyedResources    bool
 	activeTemplateDetail      *templateDetailSelection
+	activeIntegrationDetail   *entityDetailSelection
+	pendingEntityAction       *entityActionPrompt
 }
 
 func New(cfg config.Config, build BuildInfo, activeEntity string) *App {
@@ -141,6 +157,9 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetEnterFunc(app.openOverview)
 	ui.SetLogsFunc(app.openLogs)
 	ui.SetAuditFunc(app.openAuditLogs)
+	ui.SetEnableFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "enable") })
+	ui.SetDisableFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "disable") })
+	ui.SetDeleteFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "delete") })
 	ui.SetNavFunc(app.handleNav)
 	ui.SetSortFunc(app.handleSort)
 	ui.SetLoadMoreFunc(app.requestLoadMore)
@@ -445,6 +464,27 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				}
 			case 'q':
 				a.settingsTable = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.pendingEntityAction != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.confirmPendingEntityAction()
+			return true
+		case tcell.KeyEsc:
+			a.pendingEntityAction = nil
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'y', 'Y':
+				a.confirmPendingEntityAction()
+				return true
+			case 'q':
+				a.pendingEntityAction = nil
 				return false
 			}
 		}

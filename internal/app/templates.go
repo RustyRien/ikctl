@@ -46,6 +46,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 	title := fmt.Sprintf("Template: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = &templateDetailSelection{ID: id, Name: name}
+	a.activeIntegrationDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading template overview...")

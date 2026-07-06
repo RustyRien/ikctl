@@ -131,9 +131,14 @@ Auth notes:
 - `/`: enter filter mode, `Enter` to apply, `Esc` to cancel
 - `Enter`: open selected resource overview
 - `l`: open selected resource logs
+- `x`: disable selected template/integration
+- `X`: enable selected template/integration
+- `D`: delete selected template/integration
 - `Esc`, `q`: close detail view
 - `s`: enter sort mode, press a highlighted column number, then `a` for ascending or `d` for descending to fetch sorted results from the backend, `Esc` to cancel
 - `e`: choose entity (`r` resources, `t` templates, `i` integrations)
+
+Command mode also supports `:enable`, `:disable`, and `:delete` for the currently selected template or integration.
 
 The main list shows `Shown / Total` in the status bar and loads more rows from the backend automatically as you scroll near the bottom.
 

@@ -297,6 +297,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	title := fmt.Sprintf("Resource: %s", resource.Name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeIntegrationDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading resource overview...")

@@ -9,8 +9,11 @@ import (
 var availableCommands = []string{
 	"audit",
 	"columns",
+	"delete",
 	"destroyed",
+	"disable",
 	"entity",
+	"enable",
 	"integration-filter",
 	"integrations",
 	"logs",
@@ -42,6 +45,12 @@ func (a *App) runCommand(input string) {
 		a.handleNav('i')
 	case "refresh", "reload":
 		a.requestRefresh()
+	case "enable":
+		a.runEntityActionCommand("enable", input)
+	case "disable":
+		a.runEntityActionCommand("disable", input)
+	case "delete", "del", "rm", "remove":
+		a.runEntityActionCommand("delete", input)
 	case "settings", "set", "config":
 		a.openSettings()
 	case "columns", "cols", "col":
@@ -117,8 +126,16 @@ func (a *App) suggestCommand(input string) (string, []string) {
 }
 
 func (a *App) commandError(command string, message string) {
-	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :templates\n  :integrations\n  :refresh\n  :settings\n  :columns\n  :entity\n  :open\n  :logs\n  :audit\n  :template-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
+	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :templates\n  :integrations\n  :refresh\n  :enable\n  :disable\n  :delete\n  :settings\n  :columns\n  :entity\n  :open\n  :logs\n  :audit\n  :template-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
 	a.ui.OpenOverlayPrimitive("Command", view)
+}
+
+func (a *App) runEntityActionCommand(verb string, input string) {
+	if row, ok := a.ui.SelectedRow(); ok {
+		a.openEntityActionPrompt(row, verb)
+		return
+	}
+	a.commandError(input, fmt.Sprintf("No row selected for %s", verb))
 }
 
 func sharedPrefix(left string, right string) string {

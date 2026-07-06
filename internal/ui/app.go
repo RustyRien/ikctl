@@ -38,6 +38,9 @@ type App struct {
 	enterFn             func(tabledata.Row)
 	logsFn              func(tabledata.Row)
 	auditFn             func(tabledata.Row)
+	enableFn            func(tabledata.Row)
+	disableFn           func(tabledata.Row)
+	deleteFn            func(tabledata.Row)
 	navFn               func(rune)
 	sortFn              func(int, bool)
 	loadMoreFn          func()
@@ -227,6 +230,18 @@ func (a *App) SetLogsFunc(fn func(tabledata.Row)) {
 
 func (a *App) SetAuditFunc(fn func(tabledata.Row)) {
 	a.auditFn = fn
+}
+
+func (a *App) SetEnableFunc(fn func(tabledata.Row)) {
+	a.enableFn = fn
+}
+
+func (a *App) SetDisableFunc(fn func(tabledata.Row)) {
+	a.disableFn = fn
+}
+
+func (a *App) SetDeleteFunc(fn func(tabledata.Row)) {
+	a.deleteFn = fn
 }
 
 func (a *App) SetNavFunc(fn func(rune)) {
@@ -630,6 +645,24 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				a.CloseDetail()
 				return nil
 			}
+			if event.Rune() == 'x' && a.disableFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.disableFn(row)
+					return nil
+				}
+			}
+			if event.Rune() == 'X' && a.enableFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.enableFn(row)
+					return nil
+				}
+			}
+			if event.Rune() == 'D' && a.deleteFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.deleteFn(row)
+					return nil
+				}
+			}
 			if event.Rune() == 'l' && a.logsFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
 					a.logsFn(row)
@@ -729,6 +762,27 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 			if a.auditFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
 					a.auditFn(row)
+				}
+			}
+			return nil
+		case 'x':
+			if a.disableFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.disableFn(row)
+				}
+			}
+			return nil
+		case 'X':
+			if a.enableFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.enableFn(row)
+				}
+			}
+			return nil
+		case 'D':
+			if a.deleteFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.deleteFn(row)
 				}
 			}
 			return nil
