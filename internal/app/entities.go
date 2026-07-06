@@ -43,7 +43,7 @@ func (a *App) handleNav(key rune) {
 	}
 
 	a.activeKind = next
-	a.overlayTemplateJump = nil
+	a.clearOverviewJumpState()
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.entitySelectorTable = nil

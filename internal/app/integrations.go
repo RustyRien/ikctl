@@ -11,7 +11,7 @@ import (
 
 func (a *App) openIntegrationOverview(id string, name string) {
 	title := fmt.Sprintf("Integration: %s", name)
-	a.overlayTemplateJump = nil
+	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil

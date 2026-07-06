@@ -44,7 +44,7 @@ func defaultVisibleTemplateColumns() map[string]bool {
 
 func (a *App) openTemplateOverview(id string, name string) {
 	title := fmt.Sprintf("Template: %s", name)
-	a.overlayTemplateJump = nil
+	a.clearOverviewJumpState()
 	a.activeTemplateDetail = &templateDetailSelection{ID: id, Name: name}
 	a.auditLogRows = nil
 	a.auditLogTable = nil

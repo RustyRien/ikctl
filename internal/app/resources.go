@@ -295,7 +295,7 @@ func (a *App) resourceFilters() map[string]any {
 
 func (a *App) openResourceOverview(resource client.Resource) {
 	title := fmt.Sprintf("Resource: %s", resource.Name)
-	a.overlayTemplateJump = nil
+	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
@@ -311,24 +311,62 @@ func (a *App) openResourceOverview(resource client.Resource) {
 
 		full, err := a.client.Resource(ctx, resource.ID)
 		var primitive tview.Primitive
-		var jump *overlayTemplateJump
+		var jumpActions map[rune]func()
 		if err != nil {
 			primitive = errorView(fmt.Sprintf("Failed to load resource overview.\n\n%v", err))
 		} else if full != nil {
 			primitive = resourceOverviewView(*full)
+			jumpActions = a.resourceOverviewJumpActions(*full)
 			if full.Template != nil && full.Template.ID != "" {
-				jump = &overlayTemplateJump{ID: full.Template.ID, Name: full.Template.Name}
+				if jumpActions == nil {
+					jumpActions = make(map[rune]func())
+				}
+				templateID := full.Template.ID
+				templateName := full.Template.Name
+				jumpActions['t'] = func() {
+					a.openTemplateOverview(templateID, valueOr(templateName, templateID))
+				}
+			}
+			if len(jumpActions) == 0 {
+				jumpActions = nil
 			}
 		} else {
 			primitive = errorView("Resource not found")
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
-			a.overlayTemplateJump = jump
+			a.clearOverviewJumpState()
+			for key, action := range jumpActions {
+				a.setOverviewJumpAction(key, action)
+			}
 			a.ui.OpenDetailPrimitive(title, primitive)
 			a.ui.SetResourceOverviewHotkeys()
 		})
 	}()
+}
+
+func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]func() {
+	jumpActions := make(map[rune]func())
+	if len(resource.Integrations) > 0 {
+		jumpActions['i'] = func() {
+			a.openOverviewJumpSelection(
+				"Resource Integrations",
+				resourceIntegrationJumpOptions(resource.Integrations),
+				"No integrations available",
+				func(option overviewJumpOption) {
+					integration, ok := option.Value.(client.Integration)
+					if !ok {
+						return
+					}
+					a.openIntegrationOverview(integration.ID, valueOr(integration.Name, integration.ID))
+				},
+			)
+		}
+	}
+	if len(jumpActions) == 0 {
+		return nil
+	}
+	return jumpActions
 }
 
 func (a *App) openResourceColumns() {
@@ -689,6 +727,18 @@ func integrationLines(integrations []client.Integration) []string {
 	return lines
 }
 
+func resourceIntegrationJumpOptions(integrations []client.Integration) []overviewJumpOption {
+	options := make([]overviewJumpOption, 0, len(integrations))
+	for _, integration := range integrations {
+		options = append(options, overviewJumpOption{
+			Label:       valueOr(integration.Name, integration.ID),
+			Description: fmt.Sprintf("%s / %s", blankDash(integration.IntegrationProvider), blankDash(integration.IntegrationType)),
+			Value:       integration,
+		})
+	}
+	return options
+}
+
 func resourceWorkspace(resource client.Resource) string {
 	if resource.Workspace == nil {
 		return "-"
@@ -721,10 +771,48 @@ func resourceTemplateTypes(resource client.Resource) []string {
 }
 
 func resourceTemplateHint(resource client.Resource) string {
+	hints := make([]string, 0, 3)
 	if resource.Template != nil && resource.Template.ID != "" {
-		return "t open template  Esc/q close"
+		hints = append(hints, "t template")
 	}
-	return "Esc/q close"
+	if len(resource.Integrations) > 0 {
+		hints = append(hints, "i integrations")
+	}
+	if len(hints) == 0 {
+		return "Esc/q close"
+	}
+	hints = append(hints, "Esc/q close")
+	return strings.Join(hints, "  ")
+}
+
+func overviewJumpSelectionView(options []overviewJumpOption) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Jump To")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"NAME", "DETAILS"}
+	for col, header := range headers {
+		table.SetCell(col/len(headers), col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	for rowIndex, option := range options {
+		row := rowIndex + 1
+		table.SetCell(row, 0, tview.NewTableCell(blankDash(option.Label)).SetExpansion(2))
+		table.SetCell(row, 1, tview.NewTableCell(blankDash(option.Description)).SetExpansion(1))
+	}
+	if len(options) > 0 {
+		table.Select(1, 0)
+	}
+
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter("Enter jump  Esc/q close"), 1, 0, false)
+	return root, table
 }
 
 func sourceCodeIdentifier(resource client.Resource) string {

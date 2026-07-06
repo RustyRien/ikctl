@@ -65,7 +65,8 @@ var detailHeaderHints = headerHints{
 var resourceOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-		{{key: "t", label: "template"}, {key: "esc", label: "back"}, {key: "q", label: "back"}},
+		{{key: "t", label: "template"}, {key: "i", label: "integrations"}, {key: "esc", label: "back"}},
+		{{key: "q", label: "back"}},
 	},
 }
 
@@ -77,12 +78,12 @@ var templateOverviewHints = headerHints{
 }
 
 var ikLogo = []string{
-	` ___ _  __`,
-	`|_ _| |/ /`,
-	` | || ' / `,
-	` | || . \ `,
-	`|___|_|\_\`,
-	`          `,
+	`.___ ___  __.`,
+	`|   |   |/ _|`,
+	`|   |     <  `,
+	`|   |   |  \ `,
+	`|___|___|__ \`,
+	`           \/`,
 }
 
 type Header struct {
@@ -119,7 +120,7 @@ func NewHeader(cfg config.Config, version string) *Header {
 		SetDirection(tview.FlexColumn).
 		AddItem(info, 0, 2, false).
 		AddItem(hotkeyColumns, 0, 4, false).
-		AddItem(logo, 12, 0, false)
+		AddItem(logo, 18, 0, false)
 	body.SetBackgroundColor(colorBg)
 
 	root := tview.NewFlex().
@@ -147,7 +148,6 @@ func (h *Header) SetAuditHotkeys() {
 
 func (h *Header) SetFilterMenuHotkeys() {
 	h.SetHotkeys(filterMenuHeaderHints)
-
 }
 
 func (h *Header) SetAuditDetailHotkeys() {

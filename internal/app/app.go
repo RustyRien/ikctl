@@ -24,9 +24,17 @@ type BuildInfo struct {
 	Date    string
 }
 
-type overlayTemplateJump struct {
-	ID   string
-	Name string
+type overviewJumpOption struct {
+	Label       string
+	Description string
+	Value       any
+}
+
+type overviewJumpSelector struct {
+	title    string
+	options  []overviewJumpOption
+	table    *tview.Table
+	onSelect func(overviewJumpOption)
 }
 
 type auditLogSelection struct {
@@ -56,7 +64,8 @@ type App struct {
 	settingsChanged           chan struct{}
 	ctx                       context.Context
 	cancel                    context.CancelFunc
-	overlayTemplateJump       *overlayTemplateJump
+	overviewJumpActions       map[rune]func()
+	overviewJumpSelector      *overviewJumpSelector
 	auditLogRows              []tabledata.Row
 	auditLogTable             *tview.Table
 	entitySelectorTable       *tview.Table
@@ -488,6 +497,26 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 		return false
 	}
 
+	if a.overviewJumpSelector != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedOverviewJump()
+			return true
+		case tcell.KeyEsc:
+			a.overviewJumpSelector = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'q':
+				a.overviewJumpSelector = nil
+				return false
+			}
+		}
+		return false
+	}
+
 	if a.resourceColumnsTable != nil {
 		switch event.Key() {
 		case tcell.KeyEnter:
@@ -679,13 +708,61 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 		a.openTemplateTree(a.activeTemplateDetail.ID, valueOr(a.activeTemplateDetail.Name, a.activeTemplateDetail.ID))
 		return true
 	}
-	if event.Rune() != 't' || a.overlayTemplateJump == nil {
-		return false
+	if action := a.overviewJumpActions[event.Rune()]; action != nil {
+		action()
+		return true
 	}
+	return false
+}
 
-	jump := a.overlayTemplateJump
-	a.openTemplateOverview(jump.ID, valueOr(jump.Name, jump.ID))
-	return true
+func (a *App) clearOverviewJumpState() {
+	a.overviewJumpActions = nil
+	a.overviewJumpSelector = nil
+}
+
+func (a *App) setOverviewJumpAction(key rune, action func()) {
+	if action == nil {
+		return
+	}
+	if a.overviewJumpActions == nil {
+		a.overviewJumpActions = make(map[rune]func())
+	}
+	a.overviewJumpActions[key] = action
+}
+
+func (a *App) openOverviewJumpSelection(title string, options []overviewJumpOption, emptyText string, onSelect func(overviewJumpOption)) {
+	if len(options) == 0 {
+		a.overviewJumpSelector = nil
+		a.ui.OpenOverlay(title, emptyText)
+		return
+	}
+	primitive, table := overviewJumpSelectionView(options)
+	a.overviewJumpSelector = &overviewJumpSelector{
+		title:    title,
+		options:  options,
+		table:    table,
+		onSelect: onSelect,
+	}
+	a.ui.OpenOverlayPrimitive(title, primitive)
+}
+
+func (a *App) applySelectedOverviewJump() {
+	if a.overviewJumpSelector == nil || a.overviewJumpSelector.table == nil || a.overviewJumpSelector.onSelect == nil {
+		return
+	}
+	selectedRow, _ := a.overviewJumpSelector.table.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+	index := selectedRow - 1
+	if index < 0 || index >= len(a.overviewJumpSelector.options) {
+		return
+	}
+	selector := a.overviewJumpSelector
+	option := selector.options[index]
+	a.overviewJumpSelector = nil
+	a.ui.CloseOverlay()
+	selector.onSelect(option)
 }
 
 func (a *App) openLogs(row tabledata.Row) {
@@ -700,7 +777,7 @@ func (a *App) openLogs(row tabledata.Row) {
 	}
 
 	title := fmt.Sprintf("Logs: %s", entityName)
-	a.overlayTemplateJump = nil
+	a.clearOverviewJumpState()
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, fmt.Sprintf("Loading %s logs...", strings.ToLower(entityLabel)))
@@ -735,7 +812,7 @@ func (a *App) openAuditLogs(row tabledata.Row) {
 	}
 
 	title := fmt.Sprintf("Audit Logs: %s", entityName)
-	a.overlayTemplateJump = nil
+	a.clearOverviewJumpState()
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading audit logs...")
@@ -791,7 +868,7 @@ func (a *App) openSelectedAuditLog() {
 
 func (a *App) openAuditLogDetail(selection auditLogSelection) {
 	title := fmt.Sprintf("Logs: %s / %s", selection.EntityName, selection.Action)
-	a.overlayTemplateJump = nil
+	a.clearOverviewJumpState()
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading audit log details...")
