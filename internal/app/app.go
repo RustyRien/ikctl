@@ -176,6 +176,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetEnableFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "enable") })
 	ui.SetDisableFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "disable") })
 	ui.SetDeleteFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "delete") })
+	ui.SetEditFunc(app.openEntityEditor)
 	ui.SetNavFunc(app.handleNav)
 	ui.SetSortFunc(app.handleSort)
 	ui.SetLoadMoreFunc(app.requestLoadMore)
@@ -241,6 +242,20 @@ func (a *App) requestRefresh() {
 	case a.manualKick <- struct{}{}:
 	default:
 	}
+}
+
+// halt cancels the app context, stopping the background refresh loop and any
+// in-flight operations tied to it. Call resume to restart.
+func (a *App) halt() {
+	a.cancel()
+}
+
+// resume creates a fresh context and restarts the background refresh loop.
+func (a *App) resume() {
+	ctx, cancel := context.WithCancel(context.Background())
+	a.ctx = ctx
+	a.cancel = cancel
+	go a.loop()
 }
 
 func (a *App) openSelectedYAML() {
@@ -410,11 +425,16 @@ func (a *App) refresh() {
 	done := a.ui.BeginLoading()
 	defer done()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 	defer cancel()
 
 	entityModel := a.currentModel()
 	_ = entityModel.Refresh(ctx)
+
+	if a.ctx.Err() != nil {
+		return
+	}
+
 	headers, rows, total, lastUpdated, lastErr := entityModel.Snapshot()
 	if a.activeKind == model.EntityResources {
 		headers, rows = a.projectResourceList(headers, rows)

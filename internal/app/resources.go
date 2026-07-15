@@ -882,8 +882,9 @@ func resourceTemplateTypes(resource client.Resource) []string {
 }
 
 func resourceTemplateHint(resource client.Resource) string {
-	hints := make([]string, 0, 4)
+	hints := make([]string, 0, 5)
 	hints = append(hints, "y yaml")
+	hints = append(hints, "E edit")
 	if resource.Template != nil && resource.Template.ID != "" {
 		hints = append(hints, "t template")
 	}

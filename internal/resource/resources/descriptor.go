@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/electrolux-oss/ik-tui/internal/client"
+	"github.com/electrolux-oss/ik-tui/internal/edit"
 	"github.com/electrolux-oss/ik-tui/internal/render"
 	"github.com/electrolux-oss/ik-tui/internal/resource/core"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
@@ -61,6 +62,23 @@ func Descriptor(c *client.Client) *core.Descriptor {
 		},
 		WideRow: func(value any) tabledata.Row {
 			return render.ResourceWideRow(value.(client.Resource))
+		},
+		EditLoad: func(ctx context.Context, id string) ([]byte, error) {
+			item, err := c.Resource(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			if item == nil {
+				return nil, errors.New("resource not found")
+			}
+			return edit.ResourceYAML(*item)
+		},
+		ApplyEdit: func(ctx context.Context, id string, data []byte) error {
+			input, err := edit.ResourceInputFromYAML(data)
+			if err != nil {
+				return err
+			}
+			return c.UpdateResource(ctx, id, input)
 		},
 	}
 }

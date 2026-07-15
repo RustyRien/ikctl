@@ -148,9 +148,9 @@ func integrationOverviewView(integration client.Integration) tview.Primitive {
 }
 
 func integrationOverviewHint(integration client.Integration) string {
-	hints := []string{"y yaml", "l logs", "a audit", "r resources", "Esc/q close"}
+	hints := []string{"y yaml", "l logs", "a audit", "r resources", "E edit", "Esc/q close"}
 	if integration.ID == "" {
-		hints = []string{"y yaml", "l logs", "a audit", "Esc/q close"}
+		hints = []string{"y yaml", "l logs", "a audit", "E edit", "Esc/q close"}
 	}
 	return strings.Join(hints, "  ")
 }

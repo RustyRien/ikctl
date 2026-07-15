@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/electrolux-oss/ik-tui/internal/client"
+	"github.com/electrolux-oss/ik-tui/internal/edit"
 	"github.com/electrolux-oss/ik-tui/internal/render"
 	"github.com/electrolux-oss/ik-tui/internal/resource/core"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
@@ -58,6 +59,23 @@ func Descriptor(c *client.Client) *core.Descriptor {
 		},
 		WideRow: func(value any) tabledata.Row {
 			return render.TemplateWideRow(value.(client.Template))
+		},
+		EditLoad: func(ctx context.Context, id string) ([]byte, error) {
+			item, err := c.Template(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			if item == nil {
+				return nil, errors.New("template not found")
+			}
+			return edit.TemplateYAML(*item)
+		},
+		ApplyEdit: func(ctx context.Context, id string, data []byte) error {
+			input, err := edit.TemplateInputFromYAML(data)
+			if err != nil {
+				return err
+			}
+			return c.UpdateTemplate(ctx, id, input)
 		},
 	}
 }

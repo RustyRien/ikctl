@@ -42,6 +42,7 @@ type App struct {
 	enableFn            func(tabledata.Row)
 	disableFn           func(tabledata.Row)
 	deleteFn            func(tabledata.Row)
+	editFn              func(tabledata.Row)
 	navFn               func(rune)
 	sortFn              func(int, bool)
 	loadMoreFn          func()
@@ -250,6 +251,10 @@ func (a *App) SetDeleteFunc(fn func(tabledata.Row)) {
 	a.deleteFn = fn
 }
 
+func (a *App) SetEditFunc(fn func(tabledata.Row)) {
+	a.editFn = fn
+}
+
 func (a *App) SetNavFunc(fn func(rune)) {
 	a.navFn = fn
 }
@@ -323,6 +328,10 @@ func (a *App) SelectedRow() (tabledata.Row, bool) {
 
 func (a *App) DetailVisible() bool {
 	return a.detailVisible()
+}
+
+func (a *App) OverlayVisible() bool {
+	return a.overlayVisible()
 }
 
 func (a *App) OpenOverlay(title string, text string) {
@@ -693,6 +702,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 					return nil
 				}
 			}
+			if event.Rune() == 'E' && a.editFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.editFn(row)
+					return nil
+				}
+			}
 			if event.Rune() == 'l' && a.logsFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
 					a.logsFn(row)
@@ -828,6 +843,13 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 			if a.deleteFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
 					a.deleteFn(row)
+				}
+			}
+			return nil
+		case 'E':
+			if a.editFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.editFn(row)
 				}
 			}
 			return nil

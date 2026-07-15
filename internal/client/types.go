@@ -21,6 +21,7 @@ type Resource struct {
 	Creator           *Creator            `json:"creator"`
 	Integrations      []Integration       `json:"integrationIds"`
 	Secrets           []Secret            `json:"secretIds"`
+	EntityName        string              `json:"entityName"`
 	RevisionNumber    int                 `json:"revisionNumber"`
 	Abstract          bool                `json:"abstract"`
 	StoragePath       string              `json:"storagePath"`
@@ -103,13 +104,18 @@ type User struct {
 }
 
 type Integration struct {
-	ID                  string    `json:"id"`
-	Name                string    `json:"name"`
-	Description         string    `json:"description"`
-	CreatedAt           time.Time `json:"createdAt"`
-	UpdatedAt           time.Time `json:"updatedAt"`
-	IntegrationProvider string    `json:"integrationProvider"`
-	IntegrationType     string    `json:"integrationType"`
+	ID                  string         `json:"id"`
+	Name                string         `json:"name"`
+	Description         string         `json:"description"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
+	IntegrationProvider string         `json:"integrationProvider"`
+	IntegrationType     string         `json:"integrationType"`
+	EntityName          string         `json:"entityName"`
+	Labels              []string       `json:"labels"`
+	Configuration       map[string]any `json:"configuration"`
+	Status              string         `json:"status"`
+	Creator             *Creator       `json:"creator"`
 }
 
 func (i Integration) GetName() string {
@@ -238,6 +244,18 @@ type deleteTemplateMutationData struct {
 	DeleteTemplate bool `json:"deleteTemplate"`
 }
 
+type updateResourceMutationData struct {
+	UpdateResource *entityActionResult `json:"updateResource"`
+}
+
+type updateTemplateMutationData struct {
+	UpdateTemplate *templateUpdateResult `json:"updateTemplate"`
+}
+
+type updateIntegrationMutationData struct {
+	UpdateIntegration *integrationUpdateResult `json:"updateIntegration"`
+}
+
 type logsQueryData struct {
 	Logs      []Log `json:"logs"`
 	LogsCount int   `json:"logsCount"`
@@ -265,6 +283,20 @@ type entityActionResult struct {
 	ID         string `json:"id"`
 	EntityName string `json:"entityName"`
 	Status     string `json:"status"`
+}
+
+type templateUpdateResult struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Template   string `json:"template"`
+	EntityName string `json:"entityName"`
+}
+
+type integrationUpdateResult struct {
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	EntityName          string `json:"entityName"`
+	IntegrationProvider string `json:"integrationProvider"`
 }
 
 type LogStreamMessage struct {

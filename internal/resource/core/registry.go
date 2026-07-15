@@ -23,6 +23,8 @@ type Descriptor struct {
 	GetByID       func(context.Context, string) (tabledata.Row, any, error)
 	ResolveByName func(context.Context, string) (tabledata.Row, any, error)
 	WideRow       func(any) tabledata.Row
+	EditLoad      func(context.Context, string) ([]byte, error)
+	ApplyEdit     func(context.Context, string, []byte) error
 }
 
 type Registry struct {

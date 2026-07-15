@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/electrolux-oss/ik-tui/internal/client"
+	"github.com/electrolux-oss/ik-tui/internal/edit"
 	"github.com/electrolux-oss/ik-tui/internal/render"
 	"github.com/electrolux-oss/ik-tui/internal/resource/core"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
@@ -60,6 +61,23 @@ func Descriptor(c *client.Client) *core.Descriptor {
 		},
 		WideRow: func(value any) tabledata.Row {
 			return render.IntegrationWideRow(value.(client.Integration))
+		},
+		EditLoad: func(ctx context.Context, id string) ([]byte, error) {
+			item, err := c.Integration(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			if item == nil {
+				return nil, errors.New("integration not found")
+			}
+			return edit.IntegrationYAML(*item)
+		},
+		ApplyEdit: func(ctx context.Context, id string, data []byte) error {
+			input, err := edit.IntegrationInputFromYAML(data)
+			if err != nil {
+				return err
+			}
+			return c.UpdateIntegration(ctx, id, input)
 		},
 	}
 }

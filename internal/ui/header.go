@@ -20,7 +20,7 @@ var defaultHeaderHints = headerHints{
 		{{key: "r", label: "refresh"}, {key: "enter", label: "overview"}, {key: "y", label: "yaml"}},
 		{{key: "l", label: "logs"}, {key: "a", label: "audit"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
-		{{key: "e", label: "entity"}, {key: "o", label: "settings"}},
+		{{key: "E", label: "edit"}, {key: "e", label: "entity"}, {key: "o", label: "settings"}},
 		{{key: "q", label: "quit"}, {key: "ctrl-c", label: "stop"}},
 	},
 	filters: [][]menuHint{
@@ -69,6 +69,7 @@ var resourceOverviewHints = headerHints{
 		{{key: "y", label: "yaml"}, {key: "t", label: "template"}, {key: "i", label: "integrations"}},
 		{{key: "T", label: "tree"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
+		{{key: "E", label: "edit"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }
@@ -78,6 +79,7 @@ var templateOverviewHints = headerHints{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
 		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
+		{{key: "E", label: "edit"}},
 		{{key: "r", label: "resources"}, {key: "t", label: "tree view"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
@@ -88,6 +90,7 @@ var integrationOverviewHints = headerHints{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
 		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
+		{{key: "E", label: "edit"}},
 		{{key: "r", label: "resources"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},

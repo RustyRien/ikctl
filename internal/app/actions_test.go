@@ -145,7 +145,7 @@ func TestColorizeYAMLSearchRegionsMatchK9sBehavior(t *testing.T) {
 
 func TestTemplateOverviewHintIncludesResourcesAndAudit(t *testing.T) {
 	hint := templateOverviewHint(client.Template{ID: "t1", Name: "aws_redis"})
-	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "t tree view"} {
+	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "t tree view", "E edit"} {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("template overview hint missing %q in %q", want, hint)
 		}
@@ -164,9 +164,18 @@ func TestTemplateResourceJumpOptions(t *testing.T) {
 
 func TestIntegrationOverviewHintIncludesResourcesAndAudit(t *testing.T) {
 	hint := integrationOverviewHint(client.Integration{ID: "i1", Name: "aws-prod"})
-	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources"} {
+	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "E edit"} {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("integration overview hint missing %q in %q", want, hint)
+		}
+	}
+}
+
+func TestResourceTemplateHintIncludesEdit(t *testing.T) {
+	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Template: &client.Template{ID: "t1"}})
+	for _, want := range []string{"y yaml", "E edit", "t template", "T tree"} {
+		if !strings.Contains(hint, want) {
+			t.Fatalf("resource hint missing %q in %q", want, hint)
 		}
 	}
 }

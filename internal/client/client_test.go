@@ -136,7 +136,12 @@ func TestResourceAndLogs(t *testing.T) {
 
 		switch {
 		case strings.Contains(req.Query, "GetResource"):
-			fmt.Fprint(w, `{"data":{"resource":{"id":"r1","name":"redis-prod","description":"Managed Redis","state":"provisioned","status":"done","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","revisionNumber":2,"abstract":false,"storagePath":"ik-catalog/redis/prod.tfstate","labels":["prod"],"variables":[{"name":"size","value":"small"}],"outputs":[{"name":"host","value":"redis.example"}],"dependencyTags":[{"name":"env","value":"prod"}],"dependencyConfig":[{"name":"region","value":"eu-west-1"}],"template":{"id":"t1","name":"aws_redis","cloudResourceTypes":["redis"]},"workspace":{"id":"w1","name":"platform"},"storage":{"id":"st1","name":"terraform-state"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"},"integrationIds":[{"id":"i1","name":"aws-prod","integrationProvider":"aws","integrationType":"cloud"}],"secretIds":[{"id":"s1","name":"redis-password"}],"sourceCodeVersion":{"id":"scv1","identifier":"modules/redis:v1.2.3","sourceCodeFolder":"modules/redis","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","status":"ready"},"parents":[],"children":[]}}}`)
+			fmt.Fprint(w, `{"data":{"resource":{"id":"r1","name":"redis-prod","entityName":"resource","description":"Managed Redis","state":"provisioned","status":"done","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","revisionNumber":2,"abstract":false,"storagePath":"ik-catalog/redis/prod.tfstate","labels":["prod"],"variables":[{"name":"size","value":"small"}],"outputs":[{"name":"host","value":"redis.example"}],"dependencyTags":[{"name":"env","value":"prod"}],"dependencyConfig":[{"name":"region","value":"eu-west-1"}],"template":{"id":"t1","name":"aws_redis","cloudResourceTypes":["redis"]},"workspace":{"id":"w1","name":"platform"},"storage":{"id":"st1","name":"terraform-state"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"},"integrationIds":[{"id":"i1","name":"aws-prod","integrationProvider":"aws","integrationType":"cloud"}],"secretIds":[{"id":"s1","name":"redis-password"}],"sourceCodeVersion":{"id":"scv1","identifier":"modules/redis:v1.2.3","sourceCodeFolder":"modules/redis","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","status":"ready"},"parents":[],"children":[]}}}`)
+		case strings.Contains(req.Query, "UpdateResource"):
+			if req.Variables["id"] != "r1" {
+				t.Fatalf("update resource id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateResource":{"id":"r1","name":"redis-prod","entityName":"resource"}}}`)
 		case strings.Contains(req.Query, "ListLogs"):
 			filter, _ := req.Variables["filter"].(map[string]any)
 			if auditLogID, ok := filter["audit_log_id"]; ok {
@@ -205,6 +210,9 @@ func TestResourceAndLogs(t *testing.T) {
 	}
 	if total != 1 || len(auditScopedLogs) != 1 || auditScopedLogs[0].AuditLogID != "a1" {
 		t.Fatalf("audit scoped logs = %#v total=%d", auditScopedLogs, total)
+	}
+	if err := client.UpdateResource(context.Background(), "r1", map[string]any{"name": "redis-prod"}); err != nil {
+		t.Fatalf("update resource: %v", err)
 	}
 }
 
@@ -311,7 +319,7 @@ func TestIntegrationActions(t *testing.T) {
 
 		switch {
 		case strings.Contains(req.Query, "GetIntegration"):
-			fmt.Fprint(w, `{"data":{"integration":{"id":"i1","name":"aws-prod","description":"AWS","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","integrationProvider":"aws","integrationType":"cloud"}}}`)
+			fmt.Fprint(w, `{"data":{"integration":{"id":"i1","name":"aws-prod","entityName":"integration","description":"AWS","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","integrationProvider":"aws","integrationType":"cloud","labels":["prod"],"configuration":{"role":"admin"},"status":"ready","creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}}}`)
 		case strings.Contains(req.Query, "ListResources"):
 			filter, _ := req.Variables["filter"].(map[string]any)
 			got, _ := filter["integration_ids__any"].([]any)
@@ -340,6 +348,11 @@ func TestIntegrationActions(t *testing.T) {
 				t.Fatalf("delete id = %#v", req.Variables["id"])
 			}
 			fmt.Fprint(w, `{"data":{"deleteIntegration":true}}`)
+		case strings.Contains(req.Query, "UpdateIntegration"):
+			if req.Variables["id"] != "i1" {
+				t.Fatalf("update integration id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateIntegration":{"id":"i1","name":"aws-prod","entityName":"integration","integrationProvider":"aws"}}}`)
 		default:
 			t.Fatalf("unexpected query: %s", req.Query)
 		}
@@ -373,6 +386,9 @@ func TestIntegrationActions(t *testing.T) {
 	if err := client.DeleteIntegration(context.Background(), "i1"); err != nil {
 		t.Fatalf("delete integration: %v", err)
 	}
+	if err := client.UpdateIntegration(context.Background(), "i1", map[string]any{"name": "aws-updated"}); err != nil {
+		t.Fatalf("update integration: %v", err)
+	}
 }
 
 func TestTemplateActions(t *testing.T) {
@@ -402,6 +418,11 @@ func TestTemplateActions(t *testing.T) {
 				t.Fatalf("delete id = %#v", req.Variables["id"])
 			}
 			fmt.Fprint(w, `{"data":{"deleteTemplate":true}}`)
+		case strings.Contains(req.Query, "UpdateTemplate"):
+			if req.Variables["id"] != "t1" {
+				t.Fatalf("update template id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateTemplate":{"id":"t1","name":"aws_redis","template":"resource {}","entityName":"template"}}}`)
 		default:
 			t.Fatalf("unexpected query: %s", req.Query)
 		}
@@ -418,5 +439,8 @@ func TestTemplateActions(t *testing.T) {
 	}
 	if err := client.DeleteTemplate(context.Background(), "t1"); err != nil {
 		t.Fatalf("delete template: %v", err)
+	}
+	if err := client.UpdateTemplate(context.Background(), "t1", map[string]any{"name": "aws_redis"}); err != nil {
+		t.Fatalf("update template: %v", err)
 	}
 }

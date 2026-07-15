@@ -6,6 +6,7 @@
 
 - Kubectl-style `get` commands for InfraKitchen entities
 - Live `ikctl log resources <name-or-id>` streaming via GraphQL subscription
+- `ikctl edit <entity> <name-or-id>` opens YAML in your default editor and updates via GraphQL mutation
 - Live TUI backed by the same InfraKitchen GraphQL entity layer
 - Default columns: `NAME`, `TEMPLATE`, `STATE`, `STATUS`, `WORKSPACE`, `AGE`
 - Periodic refresh (default `2s`)
@@ -66,6 +67,9 @@ go run . delete integrations aws-prod
 go run . disable templates aws_redis
 go run . enable templates aws_redis
 go run . delete templates aws_redis
+go run . edit resources redis-prod
+go run . edit templates aws_redis
+go run . edit integrations aws-prod
 ```
 
 ## Config
@@ -101,6 +105,7 @@ Precedence: flags > env > config file > defaults.
 - `ikctl log resources <name-or-id> -f` shows recent logs, then follows live logs for a resource until `Ctrl-C`.
 - `ikctl log resources <name-or-id> --since <duration|rfc3339>` filters the initial log history by time.
 - `ikctl log resources <name-or-id> --since <duration|rfc3339> -f` filters the initial log history, then follows live output.
+- `ikctl edit <entity> <name-or-id>` opens the entity YAML in `IK_EDITOR`, `K9S_EDITOR`, `KUBE_EDITOR`, or `EDITOR`, then sends the corresponding update mutation.
 - `ikctl disable integrations <name-or-id>` sends a disable action for an integration.
 - `ikctl enable integrations <name-or-id>` sends an enable action for an integration.
 - `ikctl delete integrations <name-or-id>` deletes an integration.
@@ -134,11 +139,12 @@ Auth notes:
 - `x`: disable selected template/integration
 - `X`: enable selected template/integration
 - `D`: delete selected template/integration
+- `E`: edit selected resource/template/integration in your editor
 - `Esc`, `q`: close detail view
 - `s`: enter sort mode, press a highlighted column number, then `a` for ascending or `d` for descending to fetch sorted results from the backend, `Esc` to cancel
 - `e`: choose entity (`r` resources, `t` templates, `i` integrations)
 
-Command mode also supports `:enable`, `:disable`, and `:delete` for the currently selected template or integration.
+Command mode also supports `:enable`, `:disable`, `:delete`, and `:edit` for the currently selected entity.
 
 The main list shows `Shown / Total` in the status bar and loads more rows from the backend automatically as you scroll near the bottom.
 

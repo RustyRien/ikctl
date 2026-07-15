@@ -9,11 +9,21 @@ const integrationsQuery = `query ListIntegrations($filter: JSON, $sort: [String!
   integrations(filter: $filter, sort: $sort, range: $range) {
     id
     name
+    entityName
     description
     createdAt
     updatedAt
     integrationProvider
     integrationType
+    labels
+    configuration
+    status
+    creator {
+      id
+      identifier
+      email
+      displayName
+    }
   }
   integrationsCount(filter: $filter)
 }`
@@ -22,11 +32,21 @@ const integrationQuery = `query GetIntegration($id: UUID!) {
   integration(id: $id) {
     id
     name
+    entityName
     description
     createdAt
     updatedAt
     integrationProvider
     integrationType
+    labels
+    configuration
+    status
+    creator {
+      id
+      identifier
+      email
+      displayName
+    }
   }
 }`
 
@@ -40,6 +60,15 @@ const integrationActionMutation = `mutation IntegrationAction($id: UUID!, $input
 
 const deleteIntegrationMutation = `mutation DeleteIntegration($id: UUID!) {
   deleteIntegration(id: $id)
+}`
+
+const updateIntegrationMutation = `mutation UpdateIntegration($id: UUID!, $input: IntegrationUpdateInput!) {
+  updateIntegration(id: $id, input: $input) {
+    id
+    name
+    entityName
+    integrationProvider
+  }
 }`
 
 func (c *Client) Integrations(ctx context.Context, filter map[string]any, sort []string, pageRange []int) (IntegrationsResult, error) {
@@ -91,6 +120,17 @@ func (c *Client) DeleteIntegration(ctx context.Context, id string) error {
 		return errors.New("integration delete failed")
 	}
 	return nil
+}
+
+func (c *Client) UpdateIntegration(ctx context.Context, id string, input map[string]any) error {
+	_, err := query[updateIntegrationMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: updateIntegrationMutation,
+		Variables: map[string]any{
+			"id":    id,
+			"input": input,
+		},
+	})
+	return err
 }
 
 func (c *Client) integrationAction(ctx context.Context, id string, action string) error {

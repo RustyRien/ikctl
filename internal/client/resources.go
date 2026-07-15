@@ -9,6 +9,7 @@ const resourcesQuery = `query ListResources($filter: JSON, $sort: [String!], $ra
   resources(filter: $filter, sort: $sort, range: $range) {
     id
     name
+    entityName
     description
     state
     status
@@ -95,6 +96,7 @@ const resourceQuery = `query GetResource($id: UUID!) {
   resource(id: $id) {
     id
     name
+    entityName
     description
     state
     status
@@ -242,6 +244,23 @@ const templateActionMutation = `mutation TemplateAction($id: UUID!, $input: Temp
   }
 }`
 
+const updateResourceMutation = `mutation UpdateResource($id: UUID!, $input: ResourceUpdateInput!) {
+  updateResource(id: $id, input: $input) {
+    id
+    name
+    entityName
+  }
+}`
+
+const updateTemplateMutation = `mutation UpdateTemplate($id: UUID!, $input: TemplateUpdateInput!) {
+  updateTemplate(id: $id, input: $input) {
+    id
+    name
+    template
+    entityName
+  }
+}`
+
 const deleteTemplateMutation = `mutation DeleteTemplate($id: UUID!) {
   deleteTemplate(id: $id)
 }`
@@ -355,6 +374,28 @@ func (c *Client) TemplateTree(ctx context.Context, id string, direction string) 
 		return nil, err
 	}
 	return resp.TemplateTree, nil
+}
+
+func (c *Client) UpdateResource(ctx context.Context, id string, input map[string]any) error {
+	_, err := query[updateResourceMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: updateResourceMutation,
+		Variables: map[string]any{
+			"id":    id,
+			"input": input,
+		},
+	})
+	return err
+}
+
+func (c *Client) UpdateTemplate(ctx context.Context, id string, input map[string]any) error {
+	_, err := query[updateTemplateMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: updateTemplateMutation,
+		Variables: map[string]any{
+			"id":    id,
+			"input": input,
+		},
+	})
+	return err
 }
 
 func (c *Client) EnableTemplate(ctx context.Context, id string) error {
