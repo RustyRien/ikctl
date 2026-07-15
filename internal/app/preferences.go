@@ -18,6 +18,9 @@ func (a *App) applySavedViewPreferences() {
 	if ref := a.config.View.Resources.TemplateFilter; ref.ID != "" {
 		a.resourceTemplateFilter = &client.Template{ID: ref.ID, Name: ref.Name}
 	}
+	if ref := a.config.View.Resources.SourceCodeVersionFilter; ref.ID != "" {
+		a.resourceSourceCodeVersionFilter = &client.SourceCodeVersion{ID: ref.ID, Identifier: ref.Name}
+	}
 	if ref := a.config.View.Resources.IntegrationFilter; ref.ID != "" {
 		a.resourceIntegrationFilter = &client.Integration{ID: ref.ID, Name: ref.Name}
 	}
@@ -29,6 +32,7 @@ func (a *App) saveViewPreferences() {
 	a.config.View.Templates.Columns = selectedFields(a.visibleTemplateColumns, templateColumnOptions)
 	a.config.View.Resources.StorageFilter = storageFilterRef(a.resourceStorageFilter)
 	a.config.View.Resources.TemplateFilter = templateFilterRef(a.resourceTemplateFilter)
+	a.config.View.Resources.SourceCodeVersionFilter = sourceCodeVersionFilterRef(a.resourceSourceCodeVersionFilter)
 	a.config.View.Resources.IntegrationFilter = integrationFilterRef(a.resourceIntegrationFilter)
 	a.config.View.Resources.HideDestroyed = a.hideDestroyedResources
 	_ = a.config.Save()
@@ -83,4 +87,11 @@ func integrationFilterRef(value *client.Integration) config.FilterRef {
 		return config.FilterRef{}
 	}
 	return config.FilterRef{ID: value.ID, Name: value.Name}
+}
+
+func sourceCodeVersionFilterRef(value *client.SourceCodeVersion) config.FilterRef {
+	if value == nil {
+		return config.FilterRef{}
+	}
+	return config.FilterRef{ID: value.ID, Name: value.GetName()}
 }

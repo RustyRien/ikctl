@@ -13,61 +13,62 @@ import (
 )
 
 type App struct {
-	app                 *tview.Application
-	header              *Header
-	content             *tview.Pages
-	table               *Table
-	status              *tview.TextView
-	main                *tview.Flex
-	pages               *tview.Pages
-	overlay             *tview.Flex
-	overlayBox          tview.Primitive
-	detailBox           tview.Primitive
-	detailHistory       []detailPage
-	filterMode          bool
-	filterMenuMode      bool
-	commandMode         bool
-	filterText          string
-	commandText         string
-	commandMatches      []string
-	config              config.Config
-	version             string
-	root                tview.Primitive
-	filterDone          func(string)
-	refreshFn           func()
-	enterFn             func(tabledata.Row)
-	yamlFn              func()
-	logsFn              func(tabledata.Row)
-	auditFn             func(tabledata.Row)
-	enableFn            func(tabledata.Row)
-	disableFn           func(tabledata.Row)
-	deleteFn            func(tabledata.Row)
-	actionMenuFn        func(tabledata.Row)
-	editFn              func(tabledata.Row)
-	reviewFn            func(tabledata.Row)
-	navFn               func(rune)
-	sortFn              func(int, bool)
-	loadMoreFn          func()
-	storageFilterFn     func()
-	templateFilterFn    func()
-	integrationFilterFn func()
-	resourceColumnsFn   func()
-	entitySelectorFn    func()
-	settingsFn          func()
-	toggleDestroyedFn   func()
-	resetFiltersFn      func()
-	commandFn           func(string)
-	commandSuggestFn    func(string) (string, []string)
-	overlayKeyFn        func(*tcell.EventKey) bool
-	detailKeyFn         func(*tcell.EventKey) bool
-	detailClosedFn      func()
-	statusBase          string
-	loadingMx           sync.Mutex
-	loadingCount        int
-	loadingFrame        int
-	loadingStop         chan struct{}
-	loadingStopOnce     sync.Once
-	listTitle           string
+	app                       *tview.Application
+	header                    *Header
+	content                   *tview.Pages
+	table                     *Table
+	status                    *tview.TextView
+	main                      *tview.Flex
+	pages                     *tview.Pages
+	overlay                   *tview.Flex
+	overlayBox                tview.Primitive
+	detailBox                 tview.Primitive
+	detailHistory             []detailPage
+	filterMode                bool
+	filterMenuMode            bool
+	commandMode               bool
+	filterText                string
+	commandText               string
+	commandMatches            []string
+	config                    config.Config
+	version                   string
+	root                      tview.Primitive
+	filterDone                func(string)
+	refreshFn                 func()
+	enterFn                   func(tabledata.Row)
+	yamlFn                    func()
+	logsFn                    func(tabledata.Row)
+	auditFn                   func(tabledata.Row)
+	enableFn                  func(tabledata.Row)
+	disableFn                 func(tabledata.Row)
+	deleteFn                  func(tabledata.Row)
+	actionMenuFn              func(tabledata.Row)
+	editFn                    func(tabledata.Row)
+	reviewFn                  func(tabledata.Row)
+	navFn                     func(rune)
+	sortFn                    func(int, bool)
+	loadMoreFn                func()
+	storageFilterFn           func()
+	templateFilterFn          func()
+	sourceCodeVersionFilterFn func()
+	integrationFilterFn       func()
+	resourceColumnsFn         func()
+	entitySelectorFn          func()
+	settingsFn                func()
+	toggleDestroyedFn         func()
+	resetFiltersFn            func()
+	commandFn                 func(string)
+	commandSuggestFn          func(string) (string, []string)
+	overlayKeyFn              func(*tcell.EventKey) bool
+	detailKeyFn               func(*tcell.EventKey) bool
+	detailClosedFn            func()
+	statusBase                string
+	loadingMx                 sync.Mutex
+	loadingCount              int
+	loadingFrame              int
+	loadingStop               chan struct{}
+	loadingStopOnce           sync.Once
+	listTitle                 string
 }
 
 type detailPage struct {
@@ -86,6 +87,7 @@ const (
 	detailHotkeysResourceOverview
 	detailHotkeysTemplateOverview
 	detailHotkeysSourceCodeOverview
+	detailHotkeysSourceCodeVersionOverview
 	detailHotkeysIntegrationOverview
 	detailHotkeysStorageOverview
 )
@@ -288,6 +290,10 @@ func (a *App) SetTemplateFilterFunc(fn func()) {
 	a.templateFilterFn = fn
 }
 
+func (a *App) SetSourceCodeVersionFilterFunc(fn func()) {
+	a.sourceCodeVersionFilterFn = fn
+}
+
 func (a *App) SetIntegrationFilterFunc(fn func()) {
 	a.integrationFilterFn = fn
 }
@@ -450,6 +456,12 @@ func (a *App) SetSourceCodeOverviewHotkeys() {
 	a.updateDetailHotkeys(detailHotkeysSourceCodeOverview)
 }
 
+func (a *App) SetSourceCodeVersionOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetSourceCodeVersionOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysSourceCodeVersionOverview)
+}
+
 func (a *App) SetIntegrationOverviewHotkeys() {
 	a.filterMenuMode = false
 	a.header.SetIntegrationOverviewHotkeys()
@@ -598,6 +610,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				a.exitFilterMenuMode()
 				if a.templateFilterFn != nil {
 					a.templateFilterFn()
+				}
+				return nil
+			case 'v':
+				a.exitFilterMenuMode()
+				if a.sourceCodeVersionFilterFn != nil {
+					a.sourceCodeVersionFilterFn()
 				}
 				return nil
 			case 'd':
@@ -914,7 +932,7 @@ func (a *App) renderStatus() {
 		return
 	}
 	if a.filterMenuMode {
-		a.status.SetText(a.withLoadingSuffix("Choose filter: s storage, i integration, t template, d hide destroyed, c reset all  Esc back"))
+		a.status.SetText(a.withLoadingSuffix("Choose filter: s storage, i integration, t template, v version, d hide destroyed, c reset all  Esc back"))
 		return
 	}
 	if a.table.SortMode() {
@@ -1043,6 +1061,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetTemplateOverviewHotkeys()
 	case detailHotkeysSourceCodeOverview:
 		a.header.SetSourceCodeOverviewHotkeys()
+	case detailHotkeysSourceCodeVersionOverview:
+		a.header.SetSourceCodeVersionOverviewHotkeys()
 	case detailHotkeysIntegrationOverview:
 		a.header.SetIntegrationOverviewHotkeys()
 	case detailHotkeysStorageOverview:

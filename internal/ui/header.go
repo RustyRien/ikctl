@@ -36,6 +36,7 @@ var filterMenuHeaderHints = headerHints{
 		{{key: "s", label: "storage"}},
 		{{key: "i", label: "integration"}},
 		{{key: "t", label: "template"}},
+		{{key: "v", label: "version"}},
 		{{key: "d", label: "hide destroyed"}},
 		{{key: "c", label: "reset all"}},
 		{{key: "esc", label: "back"}},
@@ -67,7 +68,7 @@ var detailHeaderHints = headerHints{
 var resourceOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-		{{key: "y", label: "yaml"}, {key: "t", label: "template"}, {key: "s", label: "storage"}},
+		{{key: "y", label: "yaml"}, {key: "t", label: "template"}, {key: "s", label: "storage"}, {key: "v", label: "version"}},
 		{{key: "i", label: "integrations"}},
 		{{key: "T", label: "tree"}},
 		{{key: "A", label: "actions"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
@@ -92,6 +93,16 @@ var sourceCodeOverviewHints = headerHints{
 		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
 		{{key: "A", label: "actions"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
 		{{key: "r", label: "resources"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
+var sourceCodeVersionOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "A", label: "actions"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
+		{{key: "r", label: "resources"}, {key: "t", label: "template"}, {key: "c", label: "source code"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }
@@ -206,6 +217,10 @@ func (h *Header) SetTemplateOverviewHotkeys() {
 
 func (h *Header) SetSourceCodeOverviewHotkeys() {
 	h.SetHotkeys(sourceCodeOverviewHints)
+}
+
+func (h *Header) SetSourceCodeVersionOverviewHotkeys() {
+	h.SetHotkeys(sourceCodeVersionOverviewHints)
 }
 
 func (h *Header) SetIntegrationOverviewHotkeys() {

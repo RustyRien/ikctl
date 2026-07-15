@@ -188,12 +188,38 @@ func (i Integration) GetName() string {
 }
 
 type SourceCodeVersion struct {
-	ID                string `json:"id"`
-	Identifier        string `json:"identifier"`
-	SourceCodeFolder  string `json:"sourceCodeFolder"`
-	SourceCodeVersion string `json:"sourceCodeVersion"`
-	SourceCodeBranch  string `json:"sourceCodeBranch"`
-	Status            string `json:"status"`
+	ID                string           `json:"id"`
+	Identifier        string           `json:"identifier"`
+	SourceCodeFolder  string           `json:"sourceCodeFolder"`
+	SourceCodeVersion string           `json:"sourceCodeVersion"`
+	SourceCodeBranch  string           `json:"sourceCodeBranch"`
+	Variables         []map[string]any `json:"variables"`
+	Outputs           []map[string]any `json:"outputs"`
+	CodeSnapshot      string           `json:"codeSnapshot"`
+	Description       string           `json:"description"`
+	Labels            []string         `json:"labels"`
+	Status            string           `json:"status"`
+	RevisionNumber    int              `json:"revisionNumber"`
+	ResourcesCount    int              `json:"resourcesCount"`
+	CreatedAt         time.Time        `json:"createdAt"`
+	UpdatedAt         time.Time        `json:"updatedAt"`
+	EntityName        string           `json:"entityName"`
+	Template          *Template        `json:"template"`
+	SourceCode        *SourceCode      `json:"sourceCode"`
+	Creator           *Creator         `json:"creator"`
+}
+
+func (s SourceCodeVersion) GetName() string {
+	if strings.TrimSpace(s.Identifier) != "" {
+		return s.Identifier
+	}
+	if strings.TrimSpace(s.SourceCodeVersion) != "" {
+		return s.SourceCodeVersion
+	}
+	if strings.TrimSpace(s.SourceCodeBranch) != "" {
+		return s.SourceCodeBranch
+	}
+	return s.ID
 }
 
 type ResourceReference struct {
@@ -311,6 +337,15 @@ type sourceCodeQueryData struct {
 	SourceCode *SourceCode `json:"sourceCode"`
 }
 
+type sourceCodeVersionsQueryData struct {
+	SourceCodeVersions      []SourceCodeVersion `json:"sourceCodeVersions"`
+	SourceCodeVersionsCount int                 `json:"sourceCodeVersionsCount"`
+}
+
+type sourceCodeVersionQueryData struct {
+	SourceCodeVersion *SourceCodeVersion `json:"sourceCodeVersion"`
+}
+
 type integrationActionMutationData struct {
 	IntegrationAction *entityActionResult `json:"integrationAction"`
 }
@@ -333,6 +368,10 @@ type deleteIntegrationMutationData struct {
 
 type deleteSourceCodeMutationData struct {
 	DeleteSourceCode bool `json:"deleteSourceCode"`
+}
+
+type deleteSourceCodeVersionMutationData struct {
+	DeleteSourceCodeVersion bool `json:"deleteSourceCodeVersion"`
 }
 
 type deleteTemplateMutationData struct {
@@ -367,8 +406,16 @@ type updateSourceCodeMutationData struct {
 	UpdateSourceCode *entityActionResult `json:"updateSourceCode"`
 }
 
+type updateSourceCodeVersionMutationData struct {
+	UpdateSourceCodeVersion *entityActionResult `json:"updateSourceCodeVersion"`
+}
+
 type sourceCodeActionMutationData struct {
 	SourceCodeAction *entityActionResult `json:"sourceCodeAction"`
+}
+
+type sourceCodeVersionActionMutationData struct {
+	SourceCodeVersionAction *entityActionResult `json:"sourceCodeVersionAction"`
 }
 
 type logsQueryData struct {
@@ -482,6 +529,11 @@ type StoragesResult struct {
 
 type SourceCodesResult struct {
 	Items []SourceCode
+	Total int
+}
+
+type SourceCodeVersionsResult struct {
+	Items []SourceCodeVersion
 	Total int
 }
 

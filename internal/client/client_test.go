@@ -598,3 +598,67 @@ func TestSourceCodes(t *testing.T) {
 		t.Fatalf("update source code: %v", err)
 	}
 }
+
+func TestSourceCodeVersions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "ListSourceCodeVersions"):
+			fmt.Fprint(w, `{"data":{"sourceCodeVersions":[{"id":"scv1","identifier":"modules/redis:v1.2.3","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","sourceCodeFolder":"modules/redis","description":"Redis module","labels":["prod"],"status":"done","revisionNumber":3,"resourcesCount":2,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"source_code_version","template":{"id":"t1","name":"aws_redis","abstract":false,"cloudResourceTypes":["redis"],"entityName":"template"},"sourceCode":{"id":"sc1","identifier":"github.com/acme/infrastructure","sourceCodeUrl":"https://github.com/acme/infrastructure.git","sourceCodeProvider":"github","sourceCodeLanguage":"opentofu","status":"ready","entityName":"source_code"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}],"sourceCodeVersionsCount":1}}`)
+		case strings.Contains(req.Query, "GetSourceCodeVersion"):
+			fmt.Fprint(w, `{"data":{"sourceCodeVersion":{"id":"scv1","identifier":"modules/redis:v1.2.3","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","sourceCodeFolder":"modules/redis","variables":[{"name":"size","value":"small"}],"outputs":[{"name":"host","value":"redis.example"}],"codeSnapshot":"module \"redis\" {}","description":"Redis module","labels":["prod"],"status":"done","revisionNumber":3,"resourcesCount":2,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"source_code_version","template":{"id":"t1","name":"aws_redis","abstract":false,"cloudResourceTypes":["redis"],"entityName":"template"},"sourceCode":{"id":"sc1","identifier":"github.com/acme/infrastructure","sourceCodeUrl":"https://github.com/acme/infrastructure.git","sourceCodeProvider":"github","sourceCodeLanguage":"opentofu","status":"ready","entityName":"source_code"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}}}`)
+		case strings.Contains(req.Query, "SourceCodeVersionAction"):
+			fmt.Fprint(w, `{"data":{"sourceCodeVersionAction":{"id":"scv1","entityName":"source_code_version","status":"ready"}}}`)
+		case strings.Contains(req.Query, "DeleteSourceCodeVersion"):
+			fmt.Fprint(w, `{"data":{"deleteSourceCodeVersion":true}}`)
+		case strings.Contains(req.Query, "UpdateSourceCodeVersion"):
+			if req.Variables["id"] != "scv1" {
+				t.Fatalf("update source code version id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateSourceCodeVersion":{"id":"scv1","identifier":"modules/redis:v1.2.3","entityName":"source_code_version"}}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	sourceCodeVersions, err := client.SourceCodeVersions(context.Background(), map[string]any{"source_code_version__like": "v1"}, []string{"created_at", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("source code versions query: %v", err)
+	}
+	if sourceCodeVersions.Total != 1 || len(sourceCodeVersions.Items) != 1 || sourceCodeVersions.Items[0].GetName() != "modules/redis:v1.2.3" {
+		t.Fatalf("source code versions = %#v", sourceCodeVersions)
+	}
+
+	sourceCodeVersion, err := client.SourceCodeVersion(context.Background(), "scv1")
+	if err != nil {
+		t.Fatalf("source code version query: %v", err)
+	}
+	if sourceCodeVersion == nil || sourceCodeVersion.Template == nil || sourceCodeVersion.Template.Name != "aws_redis" || sourceCodeVersion.SourceCode == nil || sourceCodeVersion.SourceCode.DisplayName() != "infrastructure" {
+		t.Fatalf("source code version = %#v", sourceCodeVersion)
+	}
+
+	if err := client.EnableSourceCodeVersion(context.Background(), "scv1"); err != nil {
+		t.Fatalf("enable source code version: %v", err)
+	}
+	if err := client.DisableSourceCodeVersion(context.Background(), "scv1"); err != nil {
+		t.Fatalf("disable source code version: %v", err)
+	}
+	if err := client.SyncSourceCodeVersion(context.Background(), "scv1"); err != nil {
+		t.Fatalf("sync source code version: %v", err)
+	}
+	if err := client.DeleteSourceCodeVersion(context.Background(), "scv1"); err != nil {
+		t.Fatalf("delete source code version: %v", err)
+	}
+	if err := client.UpdateSourceCodeVersion(context.Background(), "scv1", map[string]any{"description": "Updated"}); err != nil {
+		t.Fatalf("update source code version: %v", err)
+	}
+}

@@ -17,6 +17,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
+	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = &entityDetailSelection{ID: id, Name: name, Kind: "integrations"}
 	a.activeStorageDetail = nil
 	a.auditLogRows = nil

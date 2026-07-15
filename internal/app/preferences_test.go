@@ -19,11 +19,12 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 		ShowBreadcrumbs:  true,
 		View: config.ViewConfig{
 			Resources: config.ResourceViewConfig{
-				Columns:           []string{"name", "status", "age"},
-				StorageFilter:     config.FilterRef{ID: "st-1", Name: "terraform-state"},
-				TemplateFilter:    config.FilterRef{ID: "tpl-1", Name: "base-template"},
-				IntegrationFilter: config.FilterRef{ID: "int-1", Name: "aws"},
-				HideDestroyed:     true,
+				Columns:                 []string{"name", "status", "age"},
+				StorageFilter:           config.FilterRef{ID: "st-1", Name: "terraform-state"},
+				TemplateFilter:          config.FilterRef{ID: "tpl-1", Name: "base-template"},
+				SourceCodeVersionFilter: config.FilterRef{ID: "scv-1", Name: "modules/redis:v1.2.3"},
+				IntegrationFilter:       config.FilterRef{ID: "int-1", Name: "aws"},
+				HideDestroyed:           true,
 			},
 			Templates: config.TemplateViewConfig{
 				Columns: []string{"name", "updatedAt", "age"},
@@ -48,6 +49,9 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 	if a.resourceTemplateFilter == nil || a.resourceTemplateFilter.ID != "tpl-1" {
 		t.Fatalf("template filter not applied: %#v", a.resourceTemplateFilter)
 	}
+	if a.resourceSourceCodeVersionFilter == nil || a.resourceSourceCodeVersionFilter.ID != "scv-1" {
+		t.Fatalf("source code version filter not applied: %#v", a.resourceSourceCodeVersionFilter)
+	}
 	if a.resourceIntegrationFilter == nil || a.resourceIntegrationFilter.ID != "int-1" {
 		t.Fatalf("integration filter not applied: %#v", a.resourceIntegrationFilter)
 	}
@@ -61,6 +65,9 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 	}
 	if resourceFilter["template_id"] != "tpl-1" {
 		t.Fatalf("resource model template filter = %#v", resourceFilter)
+	}
+	if resourceFilter["source_code_version_id"] != "scv-1" {
+		t.Fatalf("resource model source code version filter = %#v", resourceFilter)
 	}
 	if got, ok := resourceFilter["integration_ids__any"].([]string); !ok || len(got) != 1 || got[0] != "int-1" {
 		t.Fatalf("resource model integration filter = %#v", resourceFilter)

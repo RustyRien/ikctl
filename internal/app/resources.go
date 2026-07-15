@@ -70,9 +70,50 @@ func (a *App) resetAllResourceFilters() {
 	}
 	a.resourceStorageFilter = nil
 	a.resourceTemplateFilter = nil
+	a.resourceSourceCodeVersionFilter = nil
 	a.resourceIntegrationFilter = nil
 	a.hideDestroyedResources = false
 	a.applyResourceFilters()
+}
+
+func (a *App) openSourceCodeVersionFilter() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+
+	selectedVersionID := ""
+	if a.resourceSourceCodeVersionFilter != nil {
+		selectedVersionID = a.resourceSourceCodeVersionFilter.ID
+	}
+	a.resetResourceFilterOverlays()
+
+	a.ui.OpenOverlay("Resource Source Code Version Filter", "Loading source code versions...")
+
+	go func(selectedID string) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		result, err := a.client.SourceCodeVersions(ctx, nil, []string{"identifier", "ASC"}, []int{0, 200})
+		var primitive tview.Primitive
+		var versions []client.SourceCodeVersion
+		var table *tview.Table
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load source code versions.\n\n%v", err))
+		} else {
+			versions = result.Items
+			primitive, table = sourceCodeVersionFilterView(result.Items, len(result.Items), result.Total, selectedID, "", false)
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.sourceCodeVersionFilterAllRows = versions
+			a.sourceCodeVersionFilterRows = versions
+			a.sourceCodeVersionFilterTable = table
+			a.ui.OpenOverlayPrimitive("Resource Source Code Version Filter", primitive)
+		})
+	}(selectedVersionID)
 }
 
 func (a *App) openStorageFilter() {
@@ -208,6 +249,19 @@ func (a *App) renderTemplateFilterOverlay() {
 	a.ui.OpenOverlayPrimitive("Resource Template Filter", primitive)
 }
 
+func (a *App) renderSourceCodeVersionFilterOverlay() {
+	selectedID := ""
+	if a.resourceSourceCodeVersionFilter != nil {
+		selectedID = a.resourceSourceCodeVersionFilter.ID
+	}
+
+	filtered := filterSourceCodeVersions(a.sourceCodeVersionFilterAllRows, a.sourceCodeVersionFilterQuery)
+	primitive, table := sourceCodeVersionFilterView(filtered, len(filtered), len(a.sourceCodeVersionFilterAllRows), selectedID, a.sourceCodeVersionFilterQuery, a.sourceCodeVersionFilterMode)
+	a.sourceCodeVersionFilterRows = filtered
+	a.sourceCodeVersionFilterTable = table
+	a.ui.OpenOverlayPrimitive("Resource Source Code Version Filter", primitive)
+}
+
 func (a *App) renderStorageFilterOverlay() {
 	selectedID := ""
 	if a.resourceStorageFilter != nil {
@@ -261,6 +315,36 @@ func (a *App) applySelectedTemplateFilter() {
 
 func (a *App) clearTemplateFilter() {
 	a.resourceTemplateFilter = nil
+	a.applyResourceFilters()
+}
+
+func (a *App) applySelectedSourceCodeVersionFilter() {
+	if a.sourceCodeVersionFilterTable == nil {
+		return
+	}
+
+	selectedRow, _ := a.sourceCodeVersionFilterTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+
+	if selectedRow == 1 {
+		a.clearSourceCodeVersionFilter()
+		return
+	}
+
+	index := selectedRow - 2
+	if index < 0 || index >= len(a.sourceCodeVersionFilterRows) {
+		return
+	}
+
+	version := a.sourceCodeVersionFilterRows[index]
+	a.resourceSourceCodeVersionFilter = &version
+	a.applyResourceFilters()
+}
+
+func (a *App) clearSourceCodeVersionFilter() {
+	a.resourceSourceCodeVersionFilter = nil
 	a.applyResourceFilters()
 }
 
@@ -356,6 +440,11 @@ func (a *App) resetResourceFilterOverlays() {
 	a.templateFilterTable = nil
 	a.templateFilterQuery = ""
 	a.templateFilterMode = false
+	a.sourceCodeVersionFilterAllRows = nil
+	a.sourceCodeVersionFilterRows = nil
+	a.sourceCodeVersionFilterTable = nil
+	a.sourceCodeVersionFilterQuery = ""
+	a.sourceCodeVersionFilterMode = false
 	a.integrationFilterAllRows = nil
 	a.integrationFilterRows = nil
 	a.integrationFilterTable = nil
@@ -372,6 +461,9 @@ func (a *App) resourceFilters() map[string]any {
 	}
 	if a.resourceTemplateFilter != nil {
 		filter["template_id"] = a.resourceTemplateFilter.ID
+	}
+	if a.resourceSourceCodeVersionFilter != nil {
+		filter["source_code_version_id"] = a.resourceSourceCodeVersionFilter.ID
 	}
 	if a.resourceIntegrationFilter != nil {
 		filter["integration_ids__any"] = []string{a.resourceIntegrationFilter.ID}
@@ -462,6 +554,93 @@ func filterStorages(storages []client.Storage, query string) []client.Storage {
 	return filtered
 }
 
+func sourceCodeVersionFilterView(versions []client.SourceCodeVersion, shown int, total int, selectedID string, query string, filterMode bool) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Source Code Versions")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"VERSION", "TEMPLATE", "TAG/BRANCH", "FOLDER"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	selectedRow := 1
+	allLabel := "All versions"
+	if selectedID == "" {
+		allLabel += "  [active]"
+	}
+	table.SetCell(1, 0, tview.NewTableCell(allLabel).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 2, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 3, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+
+	for rowIndex, version := range versions {
+		name := version.GetName()
+		if version.ID == selectedID {
+			name += "  [active]"
+			selectedRow = rowIndex + 2
+		}
+		ref := blankDash(version.SourceCodeVersion)
+		if strings.TrimSpace(version.SourceCodeBranch) != "" {
+			ref = blankDash(version.SourceCodeBranch)
+		}
+		fields := []string{
+			blankDash(name),
+			blankDash(sourceCodeVersionTemplateName(version.Template)),
+			ref,
+			blankDash(version.SourceCodeFolder),
+		}
+		for col, field := range fields {
+			table.SetCell(rowIndex+2, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+
+	table.Select(selectedRow, 0)
+
+	footerText := fmt.Sprintf("Showing %d of %d versions  / filter  Enter apply  c clear  Esc/q close", shown, total)
+	if query != "" {
+		footerText += fmt.Sprintf("  Filter: %s", query)
+	}
+	if filterMode {
+		footerText += "  typing..."
+	}
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter(footerText), 1, 0, false)
+	return root, table
+}
+
+func filterSourceCodeVersions(versions []client.SourceCodeVersion, query string) []client.SourceCodeVersion {
+	if query == "" {
+		return append([]client.SourceCodeVersion(nil), versions...)
+	}
+
+	targets := make([]string, 0, len(versions))
+	for _, version := range versions {
+		targets = append(targets, strings.ToLower(strings.Join([]string{
+			version.GetName(),
+			version.SourceCodeVersion,
+			version.SourceCodeBranch,
+			version.SourceCodeFolder,
+			sourceCodeVersionTemplateName(version.Template),
+		}, " ")))
+	}
+
+	matches := fuzzy.Find(strings.ToLower(query), targets)
+	filtered := make([]client.SourceCodeVersion, 0, len(matches))
+	for _, match := range matches {
+		filtered = append(filtered, versions[match.Index])
+	}
+	return filtered
+}
+
 func (a *App) openResourceOverview(resource client.Resource) {
 	session := a.nextLiveLogSession()
 
@@ -469,6 +648,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
+	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.auditLogRows = nil
@@ -536,6 +716,13 @@ func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]fun
 		storageName := resource.Storage.Name
 		jumpActions['s'] = func() {
 			a.openStorageOverview(storageID, valueOr(storageName, storageID))
+		}
+	}
+	if resource.SourceCodeVersion != nil && resource.SourceCodeVersion.ID != "" {
+		sourceCodeVersionID := resource.SourceCodeVersion.ID
+		sourceCodeVersionName := resource.SourceCodeVersion.GetName()
+		jumpActions['v'] = func() {
+			a.openSourceCodeVersionOverview(sourceCodeVersionID, valueOr(sourceCodeVersionName, sourceCodeVersionID))
 		}
 	}
 	if len(resource.Integrations) > 0 {
@@ -1116,6 +1303,9 @@ func resourceTemplateHint(resource client.Resource) string {
 	}
 	if resource.Storage != nil && resource.Storage.ID != "" {
 		hints = append(hints, "s storage")
+	}
+	if resource.SourceCodeVersion != nil && resource.SourceCodeVersion.ID != "" {
+		hints = append(hints, "v version")
 	}
 	hints = append(hints, "T tree")
 	if len(resource.Integrations) > 0 {

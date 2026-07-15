@@ -131,11 +131,12 @@ func TestSavePersistsTUIViewPreferences(t *testing.T) {
 		ConfigPath:       path,
 		View: ViewConfig{
 			Resources: ResourceViewConfig{
-				Columns:           []string{"name", "status", "age"},
-				StorageFilter:     FilterRef{ID: "st-1", Name: "terraform-state"},
-				TemplateFilter:    FilterRef{ID: "tpl-1", Name: "base-template"},
-				IntegrationFilter: FilterRef{ID: "int-1", Name: "aws"},
-				HideDestroyed:     true,
+				Columns:                 []string{"name", "status", "age"},
+				StorageFilter:           FilterRef{ID: "st-1", Name: "terraform-state"},
+				TemplateFilter:          FilterRef{ID: "tpl-1", Name: "base-template"},
+				SourceCodeVersionFilter: FilterRef{ID: "scv-1", Name: "modules/redis:v1.2.3"},
+				IntegrationFilter:       FilterRef{ID: "int-1", Name: "aws"},
+				HideDestroyed:           true,
 			},
 			Templates: TemplateViewConfig{
 				Columns: []string{"name", "updatedAt", "age"},
@@ -159,6 +160,9 @@ func TestSavePersistsTUIViewPreferences(t *testing.T) {
 	}
 	if reloaded.View.Resources.TemplateFilter.ID != "tpl-1" || reloaded.View.Resources.TemplateFilter.Name != "base-template" {
 		t.Fatalf("unexpected template filter: %#v", reloaded.View.Resources.TemplateFilter)
+	}
+	if reloaded.View.Resources.SourceCodeVersionFilter.ID != "scv-1" || reloaded.View.Resources.SourceCodeVersionFilter.Name != "modules/redis:v1.2.3" {
+		t.Fatalf("unexpected source code version filter: %#v", reloaded.View.Resources.SourceCodeVersionFilter)
 	}
 	if reloaded.View.Resources.IntegrationFilter.ID != "int-1" || reloaded.View.Resources.IntegrationFilter.Name != "aws" {
 		t.Fatalf("unexpected integration filter: %#v", reloaded.View.Resources.IntegrationFilter)

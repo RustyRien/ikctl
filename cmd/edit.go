@@ -94,6 +94,10 @@ func editMeta(raw any) (string, string, error) {
 		return value.ID, value.Name, nil
 	case client.Integration:
 		return value.ID, value.Name, nil
+	case client.SourceCode:
+		return value.ID, value.GetName(), nil
+	case client.SourceCodeVersion:
+		return value.ID, value.GetName(), nil
 	}
 	return "", "", fmt.Errorf("unsupported entity type %T", raw)
 }

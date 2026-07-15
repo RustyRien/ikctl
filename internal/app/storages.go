@@ -17,6 +17,7 @@ func (a *App) openStorageOverview(id string, name string) {
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
+	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = &entityDetailSelection{ID: id, Name: name, Kind: "storages"}
 	a.auditLogRows = nil

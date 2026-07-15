@@ -20,6 +20,8 @@ func (a *App) openOverview(row tabledata.Row) {
 		a.openResourceOverview(value)
 	case client.SourceCode:
 		a.openSourceCodeOverview(value.ID, valueOr(value.DisplayName(), value.ID))
+	case client.SourceCodeVersion:
+		a.openSourceCodeVersionOverview(value.ID, valueOr(value.GetName(), value.ID))
 	case client.Template:
 		a.openTemplateOverview(value.ID, value.Name)
 	case client.Integration:
@@ -38,6 +40,8 @@ func (a *App) handleNav(key rune) {
 		next = model.EntityResources
 	case 'c':
 		next = model.EntitySourceCodes
+	case 'v':
+		next = model.EntitySourceCodeVersions
 	case 's':
 		next = model.EntityStorages
 	case 't':
@@ -65,6 +69,11 @@ func (a *App) handleNav(key rune) {
 	a.templateFilterTable = nil
 	a.templateFilterQuery = ""
 	a.templateFilterMode = false
+	a.sourceCodeVersionFilterAllRows = nil
+	a.sourceCodeVersionFilterRows = nil
+	a.sourceCodeVersionFilterTable = nil
+	a.sourceCodeVersionFilterQuery = ""
+	a.sourceCodeVersionFilterMode = false
 	a.storageFilterAllRows = nil
 	a.storageFilterRows = nil
 	a.storageFilterTable = nil
@@ -79,6 +88,7 @@ func (a *App) handleNav(key rune) {
 	a.templateColumnsTable = nil
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
+	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.pendingEntityAction = nil
@@ -137,6 +147,11 @@ func (a *App) openEntitySelector() {
 	a.templateFilterTable = nil
 	a.templateFilterQuery = ""
 	a.templateFilterMode = false
+	a.sourceCodeVersionFilterAllRows = nil
+	a.sourceCodeVersionFilterRows = nil
+	a.sourceCodeVersionFilterTable = nil
+	a.sourceCodeVersionFilterQuery = ""
+	a.sourceCodeVersionFilterMode = false
 	a.storageFilterAllRows = nil
 	a.storageFilterRows = nil
 	a.storageFilterTable = nil
@@ -171,10 +186,12 @@ func (a *App) applySelectedEntity() {
 	case 2:
 		key = 'c'
 	case 3:
-		key = 's'
+		key = 'v'
 	case 4:
-		key = 't'
+		key = 's'
 	case 5:
+		key = 't'
+	case 6:
 		key = 'i'
 	default:
 		return
@@ -207,6 +224,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 	}{
 		{kind: model.EntityResources, label: "Resources", key: "r"},
 		{kind: model.EntitySourceCodes, label: "Source Codes", key: "c"},
+		{kind: model.EntitySourceCodeVersions, label: "Source Code Versions", key: "v"},
 		{kind: model.EntityStorages, label: "Storages", key: "s"},
 		{kind: model.EntityTemplates, label: "Templates", key: "t"},
 		{kind: model.EntityIntegrations, label: "Integrations", key: "i"},
@@ -231,7 +249,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(table, 0, 1, true)
-	root.AddItem(overviewFooter("Enter apply  r/c/s/t/i quick switch  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("Enter apply  r/c/v/s/t/i quick switch  Esc/q close"), 1, 0, false)
 	return root, table
 }
 
@@ -239,6 +257,8 @@ func entityTitle(kind model.EntityKind) string {
 	switch kind {
 	case model.EntitySourceCodes:
 		return "Source Codes"
+	case model.EntitySourceCodeVersions:
+		return "Source Code Versions"
 	case model.EntityStorages:
 		return "Storages"
 	case model.EntityTemplates:
@@ -256,12 +276,15 @@ func (a *App) currentEntityTitle() string {
 		return title
 	}
 
-	filters := make([]string, 0, 3)
+	filters := make([]string, 0, 4)
 	if a.resourceStorageFilter != nil {
 		filters = append(filters, fmt.Sprintf("storage: %s", a.resourceStorageFilter.Name))
 	}
 	if a.resourceTemplateFilter != nil {
 		filters = append(filters, fmt.Sprintf("template: %s", a.resourceTemplateFilter.Name))
+	}
+	if a.resourceSourceCodeVersionFilter != nil {
+		filters = append(filters, fmt.Sprintf("version: %s", a.resourceSourceCodeVersionFilter.GetName()))
 	}
 	if a.resourceIntegrationFilter != nil {
 		filters = append(filters, fmt.Sprintf("integration: %s", a.resourceIntegrationFilter.Name))
@@ -279,6 +302,8 @@ func entityEmptyLabel(kind model.EntityKind) string {
 	switch kind {
 	case model.EntitySourceCodes:
 		return "No source codes"
+	case model.EntitySourceCodeVersions:
+		return "No source code versions"
 	case model.EntityStorages:
 		return "No storages"
 	case model.EntityTemplates:

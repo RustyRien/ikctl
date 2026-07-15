@@ -16,11 +16,12 @@ import (
 type EntityKind string
 
 const (
-	EntityResources    EntityKind = "resources"
-	EntitySourceCodes  EntityKind = "source_codes"
-	EntityTemplates    EntityKind = "templates"
-	EntityIntegrations EntityKind = "integrations"
-	EntityStorages     EntityKind = "storages"
+	EntityResources          EntityKind = "resources"
+	EntitySourceCodes        EntityKind = "source_codes"
+	EntitySourceCodeVersions EntityKind = "source_code_versions"
+	EntityTemplates          EntityKind = "templates"
+	EntityIntegrations       EntityKind = "integrations"
+	EntityStorages           EntityKind = "storages"
 )
 
 type EntityModel struct {

@@ -91,58 +91,65 @@ const (
 )
 
 type App struct {
-	config                    config.Config
-	build                     BuildInfo
-	client                    *client.Client
-	models                    map[model.EntityKind]*model.EntityModel
-	registry                  *resource.Registry
-	kindByName                map[string]model.EntityKind
-	nameByKind                map[model.EntityKind]string
-	activeKind                model.EntityKind
-	ui                        *uiapp.App
-	manualKick                chan struct{}
-	settingsChanged           chan struct{}
-	ctx                       context.Context
-	cancel                    context.CancelFunc
-	overviewJumpActions       map[rune]func()
-	overviewJumpSelector      *overviewJumpSelector
-	auditLogRows              []tabledata.Row
-	auditLogTable             *tview.Table
-	entitySelectorTable       *tview.Table
-	settingsTable             *tview.Table
-	overviewTree              *overviewTreeSelection
-	templateFilterAllRows     []client.Template
-	templateFilterRows        []client.Template
-	templateFilterTable       *tview.Table
-	templateFilterQuery       string
-	templateFilterMode        bool
-	storageFilterAllRows      []client.Storage
-	storageFilterRows         []client.Storage
-	storageFilterTable        *tview.Table
-	storageFilterQuery        string
-	storageFilterMode         bool
-	integrationFilterAllRows  []client.Integration
-	integrationFilterRows     []client.Integration
-	integrationFilterTable    *tview.Table
-	integrationFilterQuery    string
-	integrationFilterMode     bool
-	resourceColumnsTable      *tview.Table
-	visibleResourceColumns    map[string]bool
-	templateColumnsTable      *tview.Table
-	visibleTemplateColumns    map[string]bool
-	resourceStorageFilter     *client.Storage
-	resourceTemplateFilter    *client.Template
-	resourceIntegrationFilter *client.Integration
-	hideDestroyedResources    bool
-	activeTemplateDetail      *templateDetailSelection
-	activeSourceCodeDetail    *entityDetailSelection
-	activeIntegrationDetail   *entityDetailSelection
-	activeStorageDetail       *entityDetailSelection
-	pendingEntityAction       *entityActionPrompt
-	resourceReview            *resourceReviewState
-	liveLogMx                 sync.Mutex
-	liveLogCancel             context.CancelFunc
-	liveLogSession            int
+	config                          config.Config
+	build                           BuildInfo
+	client                          *client.Client
+	models                          map[model.EntityKind]*model.EntityModel
+	registry                        *resource.Registry
+	kindByName                      map[string]model.EntityKind
+	nameByKind                      map[model.EntityKind]string
+	activeKind                      model.EntityKind
+	ui                              *uiapp.App
+	manualKick                      chan struct{}
+	settingsChanged                 chan struct{}
+	ctx                             context.Context
+	cancel                          context.CancelFunc
+	overviewJumpActions             map[rune]func()
+	overviewJumpSelector            *overviewJumpSelector
+	auditLogRows                    []tabledata.Row
+	auditLogTable                   *tview.Table
+	entitySelectorTable             *tview.Table
+	settingsTable                   *tview.Table
+	overviewTree                    *overviewTreeSelection
+	templateFilterAllRows           []client.Template
+	templateFilterRows              []client.Template
+	templateFilterTable             *tview.Table
+	templateFilterQuery             string
+	templateFilterMode              bool
+	sourceCodeVersionFilterAllRows  []client.SourceCodeVersion
+	sourceCodeVersionFilterRows     []client.SourceCodeVersion
+	sourceCodeVersionFilterTable    *tview.Table
+	sourceCodeVersionFilterQuery    string
+	sourceCodeVersionFilterMode     bool
+	storageFilterAllRows            []client.Storage
+	storageFilterRows               []client.Storage
+	storageFilterTable              *tview.Table
+	storageFilterQuery              string
+	storageFilterMode               bool
+	integrationFilterAllRows        []client.Integration
+	integrationFilterRows           []client.Integration
+	integrationFilterTable          *tview.Table
+	integrationFilterQuery          string
+	integrationFilterMode           bool
+	resourceColumnsTable            *tview.Table
+	visibleResourceColumns          map[string]bool
+	templateColumnsTable            *tview.Table
+	visibleTemplateColumns          map[string]bool
+	resourceStorageFilter           *client.Storage
+	resourceTemplateFilter          *client.Template
+	resourceSourceCodeVersionFilter *client.SourceCodeVersion
+	resourceIntegrationFilter       *client.Integration
+	hideDestroyedResources          bool
+	activeTemplateDetail            *templateDetailSelection
+	activeSourceCodeDetail          *entityDetailSelection
+	activeSourceCodeVersionDetail   *entityDetailSelection
+	activeIntegrationDetail         *entityDetailSelection
+	activeStorageDetail             *entityDetailSelection
+	pendingEntityAction             *entityActionPrompt
+	resourceReview                  *resourceReviewState
+	liveLogMx                       sync.Mutex
+	liveLogCancel                   context.CancelFunc
+	liveLogSession                  int
 }
 
 func New(cfg config.Config, build BuildInfo, activeEntity string) *App {
@@ -206,6 +213,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetSortFunc(app.handleSort)
 	ui.SetLoadMoreFunc(app.requestLoadMore)
 	ui.SetTemplateFilterFunc(app.openTemplateFilter)
+	ui.SetSourceCodeVersionFilterFunc(app.openSourceCodeVersionFilter)
 	ui.SetStorageFilterFunc(app.openStorageFilter)
 	ui.SetIntegrationFilterFunc(app.openIntegrationFilter)
 	ui.SetResourceColumnsFunc(app.openColumns)
@@ -350,6 +358,10 @@ func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string
 	case client.SourceCode:
 		return fmt.Sprintf("YAML: Source Code %s", valueOr(value.DisplayName(), value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.SourceCode(ctx, id)
+		}, true
+	case client.SourceCodeVersion:
+		return fmt.Sprintf("YAML: Source Code Version %s", valueOr(value.GetName(), value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.SourceCodeVersion(ctx, id)
 		}, true
 	case client.Integration:
 		return fmt.Sprintf("YAML: Integration %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
@@ -740,7 +752,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.entitySelectorTable = nil
 				return false
-			case 'r', 'c', 's', 't', 'i':
+			case 'r', 'c', 'v', 's', 't', 'i':
 				a.entitySelectorTable = nil
 				a.ui.CloseOverlay()
 				a.handleNav(event.Rune())
@@ -868,6 +880,65 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				a.integrationFilterTable = nil
 				a.integrationFilterQuery = ""
 				a.integrationFilterMode = false
+				a.overviewTree = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.sourceCodeVersionFilterTable != nil {
+		if a.sourceCodeVersionFilterMode {
+			switch event.Key() {
+			case tcell.KeyEsc:
+				a.sourceCodeVersionFilterMode = false
+				a.renderSourceCodeVersionFilterOverlay()
+				return true
+			case tcell.KeyBackspace, tcell.KeyBackspace2:
+				a.sourceCodeVersionFilterQuery = trimLastRune(a.sourceCodeVersionFilterQuery)
+				a.renderSourceCodeVersionFilterOverlay()
+				return true
+			case tcell.KeyEnter:
+				a.applySelectedSourceCodeVersionFilter()
+				return true
+			case tcell.KeyRune:
+				if event.Rune() != '/' {
+					a.sourceCodeVersionFilterQuery += string(event.Rune())
+					a.renderSourceCodeVersionFilterOverlay()
+				}
+				return true
+			}
+		}
+
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedSourceCodeVersionFilter()
+			return true
+		case tcell.KeyEsc:
+			a.sourceCodeVersionFilterAllRows = nil
+			a.sourceCodeVersionFilterRows = nil
+			a.sourceCodeVersionFilterTable = nil
+			a.sourceCodeVersionFilterQuery = ""
+			a.sourceCodeVersionFilterMode = false
+			a.overviewTree = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '/':
+				a.sourceCodeVersionFilterMode = true
+				a.renderSourceCodeVersionFilterOverlay()
+				return true
+			case 'c':
+				a.clearSourceCodeVersionFilter()
+				return true
+			case 'q':
+				a.sourceCodeVersionFilterAllRows = nil
+				a.sourceCodeVersionFilterRows = nil
+				a.sourceCodeVersionFilterTable = nil
+				a.sourceCodeVersionFilterQuery = ""
+				a.sourceCodeVersionFilterMode = false
 				a.overviewTree = nil
 				return false
 			}
@@ -1542,6 +1613,8 @@ func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, 
 		return value.ID, value.Name, "template", true
 	case client.SourceCode:
 		return value.ID, valueOr(value.DisplayName(), value.ID), "source_code", true
+	case client.SourceCodeVersion:
+		return value.ID, valueOr(value.GetName(), value.ID), "source_code_version", true
 	case client.Integration:
 		return value.ID, value.Name, "integration", true
 	case client.Storage:

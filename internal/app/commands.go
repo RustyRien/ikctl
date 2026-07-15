@@ -24,10 +24,12 @@ var availableCommands = []string{
 	"reset-filters",
 	"resources",
 	"source-codes",
+	"source-code-versions",
 	"settings",
 	"storage-filter",
 	"storages",
 	"template-filter",
+	"version-filter",
 	"templates",
 	"yaml",
 }
@@ -46,6 +48,8 @@ func (a *App) runCommand(input string) {
 		a.handleNav('r')
 	case "c", "sc", "source-code", "source-codes", "source_code", "source_codes":
 		a.handleNav('c')
+	case "v", "scv", "source-code-version", "source-code-versions", "source_code_version", "source_code_versions":
+		a.handleNav('v')
 	case "s", "stg", "storage", "storages":
 		a.handleNav('s')
 	case "t", "tpl", "template", "templates":
@@ -98,6 +102,8 @@ func (a *App) runCommand(input string) {
 		a.commandError(input, "No row selected for yaml")
 	case "template-filter", "tf":
 		a.openTemplateFilter()
+	case "version-filter", "vf", "source-code-version-filter", "scvf":
+		a.openSourceCodeVersionFilter()
 	case "storage-filter", "sf":
 		a.openStorageFilter()
 	case "integration-filter", "if":
@@ -149,7 +155,7 @@ func (a *App) suggestCommand(input string) (string, []string) {
 }
 
 func (a *App) commandError(command string, message string) {
-	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :source-codes\n  :templates\n  :integrations\n  :storages\n  :refresh\n  :enable\n  :disable\n  :delete\n  :edit\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :storage-filter\n  :template-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
+	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :source-codes\n  :source-code-versions\n  :templates\n  :integrations\n  :storages\n  :refresh\n  :enable\n  :disable\n  :delete\n  :edit\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :storage-filter\n  :template-filter\n  :version-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
 	a.ui.OpenOverlayPrimitive("Command", view)
 }
 

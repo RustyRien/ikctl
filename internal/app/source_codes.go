@@ -17,6 +17,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = &entityDetailSelection{ID: id, Name: name, Kind: "source_codes"}
+	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.auditLogRows = nil
@@ -43,6 +44,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 			jumpActions = a.sourceCodeOverviewJumpActions(*full)
 		} else {
 			a.activeSourceCodeDetail = nil
+			a.activeSourceCodeVersionDetail = nil
 			a.activeIntegrationDetail = nil
 			a.activeStorageDetail = nil
 			primitive = errorView("Source code not found")

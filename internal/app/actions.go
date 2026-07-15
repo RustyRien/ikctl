@@ -57,6 +57,12 @@ var entityActionDescriptions = map[string]map[string]string{
 		"sync":    "Synchronize the source code repository with the remote provider.",
 		"delete":  "Delete the source code repository record.",
 	},
+	"source_code_version": {
+		"enable":  "Enable the source code version.",
+		"disable": "Disable the source code version.",
+		"sync":    "Synchronize the source code version.",
+		"delete":  "Delete the source code version record.",
+	},
 	"integration": {
 		"enable":  "Enable the integration.",
 		"disable": "Disable the integration.",
@@ -66,19 +72,21 @@ var entityActionDescriptions = map[string]map[string]string{
 }
 
 var entityActionPriority = map[string]map[string]int{
-	"resource":    resourceActionPriority,
-	"template":    {"enable": 10, "disable": 20, "delete": 30},
-	"source_code": {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
-	"integration": {"enable": 10, "disable": 20, "delete": 30},
-	"storage":     {},
+	"resource":            resourceActionPriority,
+	"template":            {"enable": 10, "disable": 20, "delete": 30},
+	"source_code":         {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
+	"source_code_version": {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
+	"integration":         {"enable": 10, "disable": 20, "delete": 30},
+	"storage":             {},
 }
 
 var entityActionKindLabel = map[string]string{
-	"resource":    "resource",
-	"template":    "template",
-	"source_code": "source code",
-	"integration": "integration",
-	"storage":     "storage",
+	"resource":            "resource",
+	"template":            "template",
+	"source_code":         "source code",
+	"source_code_version": "source code version",
+	"integration":         "integration",
+	"storage":             "storage",
 }
 
 func titleCase(value string) string {
@@ -115,6 +123,8 @@ func (a *App) entityActionPromptForRow(row tabledata.Row, verb string) (*entityA
 		return a.templateActionPrompt(value, verb)
 	case client.SourceCode:
 		return a.sourceCodeActionPrompt(value, verb)
+	case client.SourceCodeVersion:
+		return a.sourceCodeVersionActionPrompt(value, verb)
 	case client.Integration:
 		return a.integrationActionPrompt(value, verb)
 	case client.Resource:
@@ -151,6 +161,12 @@ func (a *App) openEntityActionMenu(row tabledata.Row) {
 			return []string{"enable", "disable", "sync", "delete"}, nil
 		}, func(action string) (*entityActionPrompt, bool) {
 			return a.sourceCodeActionPrompt(value, action)
+		})
+	case client.SourceCodeVersion:
+		a.openTypedEntityActionMenu("source_code_version", value.ID, valueOr(value.GetName(), value.ID), func(context.Context, string) ([]string, error) {
+			return []string{"enable", "disable", "sync", "delete"}, nil
+		}, func(action string) (*entityActionPrompt, bool) {
+			return a.sourceCodeVersionActionPrompt(value, action)
 		})
 	case client.Integration:
 		a.openTypedEntityActionMenu("integration", value.ID, value.Name, func(context.Context, string) ([]string, error) {
@@ -326,6 +342,31 @@ func (a *App) sourceCodeActionPrompt(value client.SourceCode, verb string) (*ent
 		return nil, false
 	}
 	return &entityActionPrompt{Verb: verb, Kind: "source_code", ID: value.ID, Name: valueOr(value.DisplayName(), value.ID), Action: action}, true
+}
+
+func (a *App) sourceCodeVersionActionPrompt(value client.SourceCodeVersion, verb string) (*entityActionPrompt, bool) {
+	var action func(context.Context) (string, error)
+	switch verb {
+	case "enable":
+		action = func(ctx context.Context) (string, error) {
+			return "updated", a.client.EnableSourceCodeVersion(ctx, value.ID)
+		}
+	case "disable":
+		action = func(ctx context.Context) (string, error) {
+			return "updated", a.client.DisableSourceCodeVersion(ctx, value.ID)
+		}
+	case "sync":
+		action = func(ctx context.Context) (string, error) {
+			return "synced", a.client.SyncSourceCodeVersion(ctx, value.ID)
+		}
+	case "delete":
+		action = func(ctx context.Context) (string, error) {
+			return "deleted", a.client.DeleteSourceCodeVersion(ctx, value.ID)
+		}
+	default:
+		return nil, false
+	}
+	return &entityActionPrompt{Verb: verb, Kind: "source_code_version", ID: value.ID, Name: valueOr(value.GetName(), value.ID), Action: action}, true
 }
 
 func (a *App) integrationActionPrompt(value client.Integration, verb string) (*entityActionPrompt, bool) {
