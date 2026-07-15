@@ -12,6 +12,7 @@ import (
 
 func (a *App) openIntegrationOverview(id string, name string) {
 	a.stopLiveLogStream()
+	a.rememberCurrentDetailState()
 
 	title := fmt.Sprintf("Integration: %s", name)
 	a.clearOverviewJumpState()
@@ -22,6 +23,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 	a.activeIntegrationDetail = &entityDetailSelection{ID: id, Name: name, Kind: "integrations"}
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
+	a.activeWorkspaceDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading integration overview...")
@@ -46,6 +48,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 		} else {
 			a.activeIntegrationDetail = nil
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView("Integration not found")
 		}
 

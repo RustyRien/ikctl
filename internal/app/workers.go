@@ -14,6 +14,7 @@ import (
 
 func (a *App) openWorkerOverview(id string, name string) {
 	a.stopLiveLogStream()
+	a.rememberCurrentDetailState()
 
 	title := fmt.Sprintf("Worker: %s", name)
 	a.clearOverviewJumpState()
@@ -24,6 +25,7 @@ func (a *App) openWorkerOverview(id string, name string) {
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = &entityDetailSelection{ID: id, Name: name, Kind: "workers"}
+	a.activeWorkspaceDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading worker overview...")
@@ -45,6 +47,7 @@ func (a *App) openWorkerOverview(id string, name string) {
 			primitive = workerOverviewView(*full)
 		} else {
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView("Worker not found")
 		}
 

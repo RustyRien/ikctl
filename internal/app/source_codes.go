@@ -12,6 +12,7 @@ import (
 
 func (a *App) openSourceCodeOverview(id string, name string) {
 	a.stopLiveLogStream()
+	a.rememberCurrentDetailState()
 
 	title := fmt.Sprintf("Source Code: %s", valueOr(name, id))
 	a.clearOverviewJumpState()
@@ -22,6 +23,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
+	a.activeWorkspaceDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading source code overview...")
@@ -40,6 +42,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 		if err != nil {
 			a.activeSourceCodeDetail = nil
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView(fmt.Sprintf("Failed to load source code overview.\n\n%v", err))
 		} else if full != nil {
 			a.activeSourceCodeDetail = &entityDetailSelection{ID: full.ID, Name: full.DisplayName(), Kind: "source_codes"}
@@ -52,6 +55,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 			a.activeIntegrationDetail = nil
 			a.activeStorageDetail = nil
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView("Source code not found")
 		}
 

@@ -24,6 +24,8 @@ func (a *App) openOverview(row tabledata.Row) {
 		a.openSourceCodeVersionOverview(value.ID, valueOr(value.GetName(), value.ID))
 	case client.Template:
 		a.openTemplateOverview(value.ID, value.Name)
+	case client.Workspace:
+		a.openWorkspaceOverview(value.ID, value.Name)
 	case client.Secret:
 		a.openSecretOverview(value.ID, value.Name)
 	case client.Integration:
@@ -51,6 +53,8 @@ func (a *App) handleNav(key rune) {
 	case 's':
 		next = model.EntityStorages
 	case 'w':
+		next = model.EntityWorkspaces
+	case 'W':
 		next = model.EntityWorkers
 	case 't':
 		next = model.EntityTemplates
@@ -87,6 +91,11 @@ func (a *App) handleNav(key rune) {
 	a.storageFilterTable = nil
 	a.storageFilterQuery = ""
 	a.storageFilterMode = false
+	a.workspaceFilterAllRows = nil
+	a.workspaceFilterRows = nil
+	a.workspaceFilterTable = nil
+	a.workspaceFilterQuery = ""
+	a.workspaceFilterMode = false
 	a.secretFilterAllRows = nil
 	a.secretFilterRows = nil
 	a.secretFilterTable = nil
@@ -99,6 +108,7 @@ func (a *App) handleNav(key rune) {
 	a.integrationFilterMode = false
 	a.resourceColumnsTable = nil
 	a.templateColumnsTable = nil
+	a.workspaceColumnsTable = nil
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
@@ -106,6 +116,7 @@ func (a *App) handleNav(key rune) {
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
+	a.activeWorkspaceDetail = nil
 	a.pendingEntityAction = nil
 	a.resourceReview = nil
 	a.overviewTree = nil
@@ -138,6 +149,17 @@ func (a *App) handleSort(column int, asc bool) {
 		a.requestRefresh()
 		return
 	}
+	if a.activeKind == model.EntityWorkspaces {
+		headers, _ := a.projectWorkspaceList(render.WorkspaceListHeaders(), nil)
+		if column < 0 || column >= len(headers) {
+			return
+		}
+		if !a.currentModel().SetSortField(headers[column].SortField, asc) {
+			return
+		}
+		a.requestRefresh()
+		return
+	}
 	if !a.currentModel().SetSortByColumn(column, asc) {
 		return
 	}
@@ -150,6 +172,8 @@ func (a *App) openColumns() {
 		a.openResourceColumns()
 	case model.EntityTemplates:
 		a.openTemplateColumns()
+	case model.EntityWorkspaces:
+		a.openWorkspaceColumns()
 	}
 }
 
@@ -172,6 +196,11 @@ func (a *App) openEntitySelector() {
 	a.storageFilterTable = nil
 	a.storageFilterQuery = ""
 	a.storageFilterMode = false
+	a.workspaceFilterAllRows = nil
+	a.workspaceFilterRows = nil
+	a.workspaceFilterTable = nil
+	a.workspaceFilterQuery = ""
+	a.workspaceFilterMode = false
 	a.secretFilterAllRows = nil
 	a.secretFilterRows = nil
 	a.secretFilterTable = nil
@@ -183,6 +212,8 @@ func (a *App) openEntitySelector() {
 	a.integrationFilterQuery = ""
 	a.integrationFilterMode = false
 	a.resourceColumnsTable = nil
+	a.templateColumnsTable = nil
+	a.workspaceColumnsTable = nil
 
 	primitive, table := entitySelectorView(a.activeKind)
 	a.entitySelectorTable = table
@@ -212,10 +243,12 @@ func (a *App) applySelectedEntity() {
 	case 5:
 		key = 's'
 	case 6:
-		key = 'w'
+		key = 'W'
 	case 7:
 		key = 't'
 	case 8:
+		key = 'w'
+	case 9:
 		key = 'i'
 	default:
 		return
@@ -251,8 +284,9 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 		{kind: model.EntitySourceCodeVersions, label: "Source Code Versions", key: "v"},
 		{kind: model.EntitySecrets, label: "Secrets", key: "k"},
 		{kind: model.EntityStorages, label: "Storages", key: "s"},
-		{kind: model.EntityWorkers, label: "Workers", key: "w"},
+		{kind: model.EntityWorkers, label: "Workers", key: "W"},
 		{kind: model.EntityTemplates, label: "Templates", key: "t"},
+		{kind: model.EntityWorkspaces, label: "Workspaces", key: "w"},
 		{kind: model.EntityIntegrations, label: "Integrations", key: "i"},
 	}
 
@@ -275,7 +309,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(table, 0, 1, true)
-	root.AddItem(overviewFooter("Enter apply  r/c/v/k/s/w/t/i quick switch  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("Enter apply  r/c/v/k/s/W/t/w/i quick switch  Esc/q close"), 1, 0, false)
 	return root, table
 }
 
@@ -293,6 +327,8 @@ func entityTitle(kind model.EntityKind) string {
 		return "Workers"
 	case model.EntityTemplates:
 		return "Templates"
+	case model.EntityWorkspaces:
+		return "Workspaces"
 	case model.EntityIntegrations:
 		return "Integrations"
 	default:
@@ -345,6 +381,8 @@ func entityEmptyLabel(kind model.EntityKind) string {
 		return "No workers"
 	case model.EntityTemplates:
 		return "No templates"
+	case model.EntityWorkspaces:
+		return "No workspaces"
 	case model.EntityIntegrations:
 		return "No integrations"
 	default:

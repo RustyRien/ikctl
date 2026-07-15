@@ -4,11 +4,86 @@ import (
 	"testing"
 
 	"github.com/electrolux-oss/ik-tui/internal/client"
+	"github.com/electrolux-oss/ik-tui/internal/tabledata"
+	"github.com/rivo/tview"
 )
+
+func TestRestoreDetailStateRestoresOverviewJumpActions(t *testing.T) {
+	a := &App{
+		overviewJumpActions: map[rune]func(){
+			'w': func() {},
+			'T': func() {},
+		},
+		overviewJumpSelector:    &overviewJumpSelector{title: "selector"},
+		auditLogRows:            []tabledata.Row{{ID: "a1"}},
+		auditLogTable:           tview.NewTable(),
+		overviewTree:            &overviewTreeSelection{},
+		activeStorageDetail:     &entityDetailSelection{ID: "st1", Name: "state", Kind: "storages"},
+		activeWorkspaceDetail:   &entityDetailSelection{ID: "w1", Name: "platform", Kind: "workspaces"},
+		activeIntegrationDetail: &entityDetailSelection{ID: "i1", Name: "aws", Kind: "integrations"},
+	}
+
+	snapshot := a.captureDetailState()
+	a.clearOverviewJumpState()
+	a.auditLogRows = nil
+	a.auditLogTable = nil
+	a.overviewTree = nil
+	a.activeStorageDetail = nil
+	a.activeWorkspaceDetail = nil
+	a.activeIntegrationDetail = nil
+
+	a.restoreDetailState(snapshot)
+
+	if a.overviewJumpActions == nil || a.overviewJumpActions['w'] == nil || a.overviewJumpActions['T'] == nil {
+		t.Fatal("expected overview jump actions restored")
+	}
+	if a.overviewJumpSelector == nil {
+		t.Fatal("expected overview jump selector restored")
+	}
+	if len(a.auditLogRows) != 1 || a.auditLogTable == nil {
+		t.Fatal("expected audit state restored")
+	}
+	if a.activeStorageDetail == nil || a.activeWorkspaceDetail == nil || a.activeIntegrationDetail == nil {
+		t.Fatal("expected active detail selections restored")
+	}
+}
+
+func TestResourceOverviewJumpActionsIncludeWorkspaceOnW(t *testing.T) {
+	a := &App{}
+	resource := client.Resource{
+		ID:        "r1",
+		Name:      "redis",
+		Workspace: &client.Workspace{ID: "w1", Name: "platform"},
+	}
+
+	actions := a.resourceOverviewJumpActions(resource)
+	if actions == nil {
+		t.Fatal("expected jump actions")
+	}
+	if actions['w'] == nil {
+		t.Fatal("expected workspace jump action on 'w'")
+	}
+	if actions['p'] != nil {
+		t.Fatal("did not expect workspace jump action on 'p'")
+	}
+}
+
+func TestResourceOverviewLinksIncludeWorkspace(t *testing.T) {
+	links := resourceOverviewLinks(client.Resource{
+		Workspace: &client.Workspace{ID: "w1", Name: "platform"},
+	})
+	if len(links) != 1 {
+		t.Fatalf("links len = %d, want 1", len(links))
+	}
+	if links[0] != "w Workspace: platform" {
+		t.Fatalf("workspace link = %q", links[0])
+	}
+}
 
 func TestResourceFiltersIncludeStorageFilter(t *testing.T) {
 	a := &App{
 		resourceStorageFilter:           &client.Storage{ID: "st-1", Name: "terraform-state"},
+		resourceWorkspaceFilter:         &client.Workspace{ID: "ws-1", Name: "platform"},
 		resourceSecretFilter:            &client.Secret{ID: "sec-1", Name: "prod-aws-creds"},
 		resourceTemplateFilter:          &client.Template{ID: "tpl-1", Name: "base-template"},
 		resourceSourceCodeVersionFilter: &client.SourceCodeVersion{ID: "scv-1", Identifier: "modules/redis:v1.2.3"},
@@ -20,6 +95,9 @@ func TestResourceFiltersIncludeStorageFilter(t *testing.T) {
 	if filter["storage_id"] != "st-1" {
 		t.Fatalf("storage filter = %#v", filter["storage_id"])
 	}
+	if filter["workspace_id"] != "ws-1" {
+		t.Fatalf("workspace filter = %#v", filter["workspace_id"])
+	}
 	if got, ok := filter["secret_ids__any"].([]string); !ok || len(got) != 1 || got[0] != "sec-1" {
 		t.Fatalf("secret filter = %#v", filter["secret_ids__any"])
 	}
@@ -28,6 +106,28 @@ func TestResourceFiltersIncludeStorageFilter(t *testing.T) {
 	}
 	if filter["source_code_version_id"] != "scv-1" {
 		t.Fatalf("source code version filter = %#v", filter["source_code_version_id"])
+	}
+}
+
+func TestFilterWorkspacesMatchesNameProviderAndStatus(t *testing.T) {
+	workspaces := []client.Workspace{
+		{ID: "ws-1", Name: "platform", WorkspaceProvider: "github", Status: "ready", Description: "Main workspace"},
+		{ID: "ws-2", Name: "delivery", WorkspaceProvider: "bitbucket", Status: "pending", Description: "Delivery repos"},
+	}
+
+	byName := filterWorkspaces(workspaces, "platform")
+	if len(byName) != 1 || byName[0].ID != "ws-1" {
+		t.Fatalf("filter by name = %#v", byName)
+	}
+
+	byProvider := filterWorkspaces(workspaces, "bitbucket")
+	if len(byProvider) != 1 || byProvider[0].ID != "ws-2" {
+		t.Fatalf("filter by provider = %#v", byProvider)
+	}
+
+	byStatus := filterWorkspaces(workspaces, "ready")
+	if len(byStatus) != 1 || byStatus[0].ID != "ws-1" {
+		t.Fatalf("filter by status = %#v", byStatus)
 	}
 }
 

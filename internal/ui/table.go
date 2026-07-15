@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
 	"github.com/gdamore/tcell/v2"
@@ -206,16 +205,16 @@ func (t *Table) EntityMode() bool {
 }
 
 func (t *Table) EntityHints() string {
-	return "r:Resources  c:SourceCodes  v:SourceCodeVersions  k:Secrets  s:Storages  w:Workers  t:Templates  i:Integrations"
+	return "r:Resources  c:SourceCodes  v:SourceCodeVersions  k:Secrets  s:Storages  W:Workers  t:Templates  w:Workspaces  i:Integrations"
 }
 
 func (t *Table) EntityForKey(key rune) (rune, bool) {
 	if !t.entityMode {
 		return 0, false
 	}
-	switch unicode.ToLower(key) {
-	case 'r', 'c', 'v', 'k', 's', 'w', 't', 'i':
-		return unicode.ToLower(key), true
+	switch key {
+	case 'r', 'c', 'v', 'k', 's', 't', 'i', 'w', 'W':
+		return key, true
 	default:
 		return 0, false
 	}

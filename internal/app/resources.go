@@ -69,6 +69,7 @@ func (a *App) resetAllResourceFilters() {
 		return
 	}
 	a.resourceStorageFilter = nil
+	a.resourceWorkspaceFilter = nil
 	a.resourceSecretFilter = nil
 	a.resourceTemplateFilter = nil
 	a.resourceSourceCodeVersionFilter = nil
@@ -155,6 +156,46 @@ func (a *App) openStorageFilter() {
 			a.ui.OpenOverlayPrimitive("Resource Storage Filter", primitive)
 		})
 	}(selectedStorageID)
+}
+
+func (a *App) openWorkspaceFilter() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+
+	selectedWorkspaceID := ""
+	if a.resourceWorkspaceFilter != nil {
+		selectedWorkspaceID = a.resourceWorkspaceFilter.ID
+	}
+	a.resetResourceFilterOverlays()
+
+	a.ui.OpenOverlay("Resource Workspace Filter", "Loading workspaces...")
+
+	go func(selectedID string) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		result, err := a.client.Workspaces(ctx, nil, []string{"name", "ASC"}, []int{0, 200})
+		var primitive tview.Primitive
+		var workspaces []client.Workspace
+		var table *tview.Table
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load workspaces.\n\n%v", err))
+		} else {
+			workspaces = result.Items
+			primitive, table = workspaceFilterView(result.Items, len(result.Items), result.Total, selectedID, "", false)
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.workspaceFilterAllRows = workspaces
+			a.workspaceFilterRows = workspaces
+			a.workspaceFilterTable = table
+			a.ui.OpenOverlayPrimitive("Resource Workspace Filter", primitive)
+		})
+	}(selectedWorkspaceID)
 }
 
 func (a *App) openTemplateFilter() {
@@ -316,6 +357,19 @@ func (a *App) renderStorageFilterOverlay() {
 	a.ui.OpenOverlayPrimitive("Resource Storage Filter", primitive)
 }
 
+func (a *App) renderWorkspaceFilterOverlay() {
+	selectedID := ""
+	if a.resourceWorkspaceFilter != nil {
+		selectedID = a.resourceWorkspaceFilter.ID
+	}
+
+	filtered := filterWorkspaces(a.workspaceFilterAllRows, a.workspaceFilterQuery)
+	primitive, table := workspaceFilterView(filtered, len(filtered), len(a.workspaceFilterAllRows), selectedID, a.workspaceFilterQuery, a.workspaceFilterMode)
+	a.workspaceFilterRows = filtered
+	a.workspaceFilterTable = table
+	a.ui.OpenOverlayPrimitive("Resource Workspace Filter", primitive)
+}
+
 func (a *App) renderIntegrationFilterOverlay() {
 	selectedID := ""
 	if a.resourceIntegrationFilter != nil {
@@ -432,6 +486,36 @@ func (a *App) clearStorageFilter() {
 	a.applyResourceFilters()
 }
 
+func (a *App) applySelectedWorkspaceFilter() {
+	if a.workspaceFilterTable == nil {
+		return
+	}
+
+	selectedRow, _ := a.workspaceFilterTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+
+	if selectedRow == 1 {
+		a.clearWorkspaceFilter()
+		return
+	}
+
+	index := selectedRow - 2
+	if index < 0 || index >= len(a.workspaceFilterRows) {
+		return
+	}
+
+	workspace := a.workspaceFilterRows[index]
+	a.resourceWorkspaceFilter = &workspace
+	a.applyResourceFilters()
+}
+
+func (a *App) clearWorkspaceFilter() {
+	a.resourceWorkspaceFilter = nil
+	a.applyResourceFilters()
+}
+
 func (a *App) applySelectedSecretFilter() {
 	if a.secretFilterTable == nil {
 		return
@@ -519,6 +603,11 @@ func (a *App) resetResourceFilterOverlays() {
 	a.storageFilterTable = nil
 	a.storageFilterQuery = ""
 	a.storageFilterMode = false
+	a.workspaceFilterAllRows = nil
+	a.workspaceFilterRows = nil
+	a.workspaceFilterTable = nil
+	a.workspaceFilterQuery = ""
+	a.workspaceFilterMode = false
 	a.secretFilterAllRows = nil
 	a.secretFilterRows = nil
 	a.secretFilterTable = nil
@@ -547,6 +636,9 @@ func (a *App) resourceFilters() map[string]any {
 	filter := map[string]any{}
 	if a.resourceStorageFilter != nil {
 		filter["storage_id"] = a.resourceStorageFilter.ID
+	}
+	if a.resourceWorkspaceFilter != nil {
+		filter["workspace_id"] = a.resourceWorkspaceFilter.ID
 	}
 	if a.resourceSecretFilter != nil {
 		filter["secret_ids__any"] = []string{a.resourceSecretFilter.ID}
@@ -628,6 +720,65 @@ func storageFilterView(storages []client.Storage, shown int, total int, selected
 	return root, table
 }
 
+func workspaceFilterView(workspaces []client.Workspace, shown int, total int, selectedID string, query string, filterMode bool) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Workspaces")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"WORKSPACE", "PROVIDER", "STATUS", "UPDATED"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	selectedRow := 1
+	allLabel := "All workspaces"
+	if selectedID == "" {
+		allLabel += "  [active]"
+	}
+	table.SetCell(1, 0, tview.NewTableCell(allLabel).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 2, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 3, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+
+	for rowIndex, workspace := range workspaces {
+		name := workspace.Name
+		if workspace.ID == selectedID {
+			name += "  [active]"
+			selectedRow = rowIndex + 2
+		}
+		fields := []string{
+			name,
+			blankDash(workspace.WorkspaceProvider),
+			blankDash(workspace.Status),
+			workspace.UpdatedAt.Format(time.RFC3339),
+		}
+		for col, field := range fields {
+			table.SetCell(rowIndex+2, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+
+	table.Select(selectedRow, 0)
+
+	footerText := fmt.Sprintf("Showing %d of %d workspaces  / filter  Enter apply  c clear  Esc/q close", shown, total)
+	if query != "" {
+		footerText += fmt.Sprintf("  Filter: %s", query)
+	}
+	if filterMode {
+		footerText += "  typing..."
+	}
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter(footerText), 1, 0, false)
+	return root, table
+}
+
 func filterStorages(storages []client.Storage, query string) []client.Storage {
 	if query == "" {
 		return append([]client.Storage(nil), storages...)
@@ -642,6 +793,29 @@ func filterStorages(storages []client.Storage, query string) []client.Storage {
 	filtered := make([]client.Storage, 0, len(matches))
 	for _, match := range matches {
 		filtered = append(filtered, storages[match.Index])
+	}
+	return filtered
+}
+
+func filterWorkspaces(workspaces []client.Workspace, query string) []client.Workspace {
+	if query == "" {
+		return append([]client.Workspace(nil), workspaces...)
+	}
+
+	targets := make([]string, 0, len(workspaces))
+	for _, workspace := range workspaces {
+		targets = append(targets, strings.ToLower(strings.Join([]string{
+			workspace.Name,
+			workspace.WorkspaceProvider,
+			workspace.Status,
+			workspace.Description,
+		}, " ")))
+	}
+
+	matches := fuzzy.Find(strings.ToLower(query), targets)
+	filtered := make([]client.Workspace, 0, len(matches))
+	for _, match := range matches {
+		filtered = append(filtered, workspaces[match.Index])
 	}
 	return filtered
 }
@@ -818,6 +992,7 @@ func filterSourceCodeVersions(versions []client.SourceCodeVersion, query string)
 
 func (a *App) openResourceOverview(resource client.Resource) {
 	session := a.nextLiveLogSession()
+	a.rememberCurrentDetailState()
 
 	title := fmt.Sprintf("Resource: %s", resource.Name)
 	a.clearOverviewJumpState()
@@ -828,6 +1003,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
+	a.activeWorkspaceDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading resource overview...")
@@ -893,6 +1069,13 @@ func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]fun
 		storageName := resource.Storage.Name
 		jumpActions['s'] = func() {
 			a.openStorageOverview(storageID, valueOr(storageName, storageID))
+		}
+	}
+	if resource.Workspace != nil && resource.Workspace.ID != "" {
+		workspaceID := resource.Workspace.ID
+		workspaceName := resource.Workspace.Name
+		jumpActions['w'] = func() {
+			a.openWorkspaceOverview(workspaceID, valueOr(workspaceName, workspaceID))
 		}
 	}
 	if resource.SourceCodeVersion != nil && resource.SourceCodeVersion.ID != "" {
@@ -1123,6 +1306,7 @@ func resourceOverviewView(resource client.Resource) (tview.Primitive, *tview.Tex
 	description.SetTitle("Description")
 	description.SetWrap(true)
 	description.SetText(valueOr(resource.Description, "-"))
+	links := simpleList("Overview Links", resourceOverviewLinks(resource))
 
 	relations := simpleList("Relations", append(
 		prefixedRefs("Parent", resource.Parents),
@@ -1146,6 +1330,7 @@ func resourceOverviewView(resource client.Resource) (tview.Primitive, *tview.Tex
 	middle := tview.NewFlex().
 		AddItem(description, 0, 2, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(links, 0, 1, false).
 			AddItem(relations, 0, 1, false).
 			AddItem(integrations, 0, 1, false), 0, 1, false)
 
@@ -1490,6 +1675,23 @@ func resourceTemplateTypes(resource client.Resource) []string {
 	return resource.Template.CloudResourceTypes
 }
 
+func resourceOverviewLinks(resource client.Resource) []string {
+	links := make([]string, 0, 4)
+	if resource.Template != nil && resource.Template.ID != "" {
+		links = append(links, fmt.Sprintf("t Template: %s", valueOr(resource.Template.Name, resource.Template.ID)))
+	}
+	if resource.Storage != nil && resource.Storage.ID != "" {
+		links = append(links, fmt.Sprintf("s Storage: %s", valueOr(resource.Storage.Name, resource.Storage.ID)))
+	}
+	if resource.Workspace != nil && resource.Workspace.ID != "" {
+		links = append(links, fmt.Sprintf("w Workspace: %s", valueOr(resource.Workspace.Name, resource.Workspace.ID)))
+	}
+	if resource.SourceCodeVersion != nil && resource.SourceCodeVersion.ID != "" {
+		links = append(links, fmt.Sprintf("v Version: %s", valueOr(resource.SourceCodeVersion.GetName(), resource.SourceCodeVersion.ID)))
+	}
+	return links
+}
+
 func resourceTemplateHint(resource client.Resource) string {
 	hints := make([]string, 0, 5)
 	hints = append(hints, "y yaml")
@@ -1508,6 +1710,9 @@ func resourceTemplateHint(resource client.Resource) string {
 	}
 	if resource.Storage != nil && resource.Storage.ID != "" {
 		hints = append(hints, "s storage")
+	}
+	if resource.Workspace != nil && resource.Workspace.ID != "" {
+		hints = append(hints, "w workspace")
 	}
 	if resource.SourceCodeVersion != nil && resource.SourceCodeVersion.ID != "" {
 		hints = append(hints, "v version")

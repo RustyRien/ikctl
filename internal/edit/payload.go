@@ -68,6 +68,20 @@ func IntegrationInputFromYAML(data []byte) (map[string]any, error) {
 	return input, nil
 }
 
+func WorkspaceInputFromYAML(data []byte) (map[string]any, error) {
+	decoded, err := ParseYAMLMap(data)
+	if err != nil {
+		return nil, err
+	}
+	input := map[string]any{}
+	copyOptional(input, decoded,
+		fieldPair{"name", "name"},
+		fieldPair{"description", "description"},
+		fieldPair{"labels", "labels"},
+	)
+	return input, nil
+}
+
 func SecretInputFromYAML(current client.Secret, data []byte) (map[string]any, error) {
 	decoded, err := ParseYAMLMap(data)
 	if err != nil {
@@ -181,6 +195,18 @@ func IntegrationYAML(raw any) ([]byte, error) {
 		"description":   value.Description,
 		"labels":        value.Labels,
 		"configuration": value.Configuration,
+	})
+}
+
+func WorkspaceYAML(raw any) ([]byte, error) {
+	value, ok := raw.(client.Workspace)
+	if !ok {
+		return nil, fmt.Errorf("expected workspace, got %T", raw)
+	}
+	return YAMLBytes(map[string]any{
+		"name":        value.Name,
+		"description": value.Description,
+		"labels":      value.Labels,
 	})
 }
 

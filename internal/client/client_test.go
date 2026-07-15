@@ -487,6 +487,69 @@ func TestTemplateActions(t *testing.T) {
 	}
 }
 
+func TestWorkspaces(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "ListWorkspaces"):
+			fmt.Fprint(w, `{"data":{"workspaces":[{"id":"w1","name":"platform","workspaceProvider":"github","status":"ready","description":"Main team workspace","labels":["prod"],"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"workspace","integration":{"id":"i1","name":"github-app","entityName":"integration","integrationProvider":"github","integrationType":"scm"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}],"workspacesCount":1}}`)
+		case strings.Contains(req.Query, "GetWorkspace"):
+			fmt.Fprint(w, `{"data":{"workspace":{"id":"w1","name":"platform","workspaceProvider":"github","configuration":{"organization":"acme","repository":"platform"},"status":"ready","description":"Main team workspace","labels":["prod"],"resourcesCount":3,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"workspace","integration":{"id":"i1","name":"github-app","entityName":"integration","integrationProvider":"github","integrationType":"scm"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}}}`)
+		case strings.Contains(req.Query, "UpdateWorkspace"):
+			if req.Variables["id"] != "w1" {
+				t.Fatalf("update workspace id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateWorkspace":{"id":"w1","name":"platform","entityName":"workspace"}}}`)
+		case strings.Contains(req.Query, "DeleteWorkspace"):
+			if req.Variables["id"] != "w1" {
+				t.Fatalf("delete workspace id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"deleteWorkspace":true}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	workspaces, err := client.Workspaces(context.Background(), map[string]any{"workspaceProvider": "github"}, []string{"updatedAt", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("workspaces query: %v", err)
+	}
+	if workspaces.Total != 1 || len(workspaces.Items) != 1 || workspaces.Items[0].Name != "platform" {
+		t.Fatalf("workspaces = %#v", workspaces)
+	}
+
+	workspace, err := client.Workspace(context.Background(), "w1")
+	if err != nil {
+		t.Fatalf("workspace query: %v", err)
+	}
+	if workspace == nil || workspace.WorkspaceProvider != "github" || workspace.ResourcesCount != 3 {
+		t.Fatalf("workspace = %#v", workspace)
+	}
+
+	if err := client.UpdateWorkspace(context.Background(), "w1", map[string]any{"description": "Updated"}); err != nil {
+		t.Fatalf("update workspace: %v", err)
+	}
+	if err := client.DeleteWorkspace(context.Background(), "w1"); err != nil {
+		t.Fatalf("delete workspace: %v", err)
+	}
+}
+
+func TestWorkspaceGetName(t *testing.T) {
+	workspace := Workspace{Name: "platform"}
+	if workspace.GetName() != "platform" {
+		t.Fatalf("GetName() = %q", workspace.GetName())
+	}
+}
+
 func TestStorages(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -13,6 +13,7 @@ import (
 
 func (a *App) openSecretOverview(id string, name string) {
 	a.stopLiveLogStream()
+	a.rememberCurrentDetailState()
 
 	title := fmt.Sprintf("Secret: %s", name)
 	a.clearOverviewJumpState()
@@ -23,6 +24,7 @@ func (a *App) openSecretOverview(id string, name string) {
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
+	a.activeWorkspaceDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading secret overview...")
@@ -47,6 +49,7 @@ func (a *App) openSecretOverview(id string, name string) {
 		} else {
 			a.activeSecretDetail = nil
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView("Secret not found")
 		}
 

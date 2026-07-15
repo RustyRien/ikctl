@@ -12,8 +12,14 @@ func (a *App) applySavedViewPreferences() {
 	if visible := visibleColumnsFromFields(a.config.View.Templates.Columns, templateColumnOptions); len(visible) > 0 {
 		a.visibleTemplateColumns = visible
 	}
+	if visible := visibleColumnsFromFields(a.config.View.Workspaces.Columns, workspaceColumnOptions); len(visible) > 0 {
+		a.visibleWorkspaceColumns = visible
+	}
 	if ref := a.config.View.Resources.StorageFilter; ref.ID != "" {
 		a.resourceStorageFilter = &client.Storage{ID: ref.ID, Name: ref.Name}
+	}
+	if ref := a.config.View.Resources.WorkspaceFilter; ref.ID != "" {
+		a.resourceWorkspaceFilter = &client.Workspace{ID: ref.ID, Name: ref.Name}
 	}
 	if ref := a.config.View.Resources.SecretFilter; ref.ID != "" {
 		a.resourceSecretFilter = &client.Secret{ID: ref.ID, Name: ref.Name}
@@ -33,7 +39,9 @@ func (a *App) applySavedViewPreferences() {
 func (a *App) saveViewPreferences() {
 	a.config.View.Resources.Columns = selectedFields(a.visibleResourceColumns, resourceColumnOptions)
 	a.config.View.Templates.Columns = selectedFields(a.visibleTemplateColumns, templateColumnOptions)
+	a.config.View.Workspaces.Columns = selectedFields(a.visibleWorkspaceColumns, workspaceColumnOptions)
 	a.config.View.Resources.StorageFilter = storageFilterRef(a.resourceStorageFilter)
+	a.config.View.Resources.WorkspaceFilter = workspaceFilterRef(a.resourceWorkspaceFilter)
 	a.config.View.Resources.SecretFilter = secretFilterRef(a.resourceSecretFilter)
 	a.config.View.Resources.TemplateFilter = templateFilterRef(a.resourceTemplateFilter)
 	a.config.View.Resources.SourceCodeVersionFilter = sourceCodeVersionFilterRef(a.resourceSourceCodeVersionFilter)
@@ -43,6 +51,13 @@ func (a *App) saveViewPreferences() {
 }
 
 func storageFilterRef(value *client.Storage) config.FilterRef {
+	if value == nil {
+		return config.FilterRef{}
+	}
+	return config.FilterRef{ID: value.ID, Name: value.Name}
+}
+
+func workspaceFilterRef(value *client.Workspace) config.FilterRef {
 	if value == nil {
 		return config.FilterRef{}
 	}

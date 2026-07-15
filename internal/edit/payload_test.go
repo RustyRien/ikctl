@@ -79,6 +79,25 @@ configuration:
 	}
 }
 
+func TestWorkspaceInputFromYAML(t *testing.T) {
+	input, err := WorkspaceInputFromYAML([]byte(`name: platform
+description: Team workspace
+labels:
+  - prod
+configuration:
+  ignored: true
+`))
+	if err != nil {
+		t.Fatalf("WorkspaceInputFromYAML: %v", err)
+	}
+	if input["name"] != "platform" || input["description"] != "Team workspace" {
+		t.Fatalf("unexpected values: %#v", input)
+	}
+	if _, ok := input["configuration"]; ok {
+		t.Fatalf("did not expect configuration in input: %#v", input)
+	}
+}
+
 func TestStorageInputFromYAML(t *testing.T) {
 	input, err := StorageInputFromYAML([]byte(`name: tf-state
 description: Terraform state bucket
@@ -235,6 +254,37 @@ func TestIntegrationYAMLIncludesOnlyEditableFields(t *testing.T) {
 		}
 	}
 	for _, unwanted := range []string{"\nstatus:", "\ncreated_at:", "\nupdated_at:", "\nintegration_provider:", "\nintegration_type:", "\nentity_name:", "\nid:"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("did not expect YAML to contain %q, got:\n%s", unwanted, text)
+		}
+	}
+}
+
+func TestWorkspaceYAMLIncludesOnlyEditableFields(t *testing.T) {
+	data, err := WorkspaceYAML(client.Workspace{
+		ID:                "w1",
+		Name:              "platform",
+		Description:       "Team workspace",
+		Labels:            []string{"prod"},
+		WorkspaceProvider: "github",
+		Status:            "ready",
+		ResourcesCount:    3,
+	})
+	if err != nil {
+		t.Fatalf("WorkspaceYAML: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"name: platform",
+		"description: Team workspace",
+		"labels:",
+		"- prod",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected YAML to contain %q, got:\n%s", want, text)
+		}
+	}
+	for _, unwanted := range []string{"\nworkspace_provider:", "\nstatus:", "\nresources_count:", "\nid:"} {
 		if strings.Contains(text, unwanted) {
 			t.Fatalf("did not expect YAML to contain %q, got:\n%s", unwanted, text)
 		}

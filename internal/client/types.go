@@ -74,8 +74,23 @@ type TemplateReference struct {
 }
 
 type Workspace struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID                string         `json:"id"`
+	Name              string         `json:"name"`
+	WorkspaceProvider string         `json:"workspaceProvider"`
+	Configuration     map[string]any `json:"configuration"`
+	Status            string         `json:"status"`
+	Description       string         `json:"description"`
+	Labels            []string       `json:"labels"`
+	ResourcesCount    int            `json:"resourcesCount"`
+	CreatedAt         time.Time      `json:"createdAt"`
+	UpdatedAt         time.Time      `json:"updatedAt"`
+	EntityName        string         `json:"entityName"`
+	Integration       *Integration   `json:"integration"`
+	Creator           *Creator       `json:"creator"`
+}
+
+func (w Workspace) GetName() string {
+	return w.Name
 }
 
 type Storage struct {
@@ -316,6 +331,15 @@ type templatesQueryData struct {
 	TemplatesCount int        `json:"templatesCount"`
 }
 
+type workspacesQueryData struct {
+	Workspaces      []Workspace `json:"workspaces"`
+	WorkspacesCount int         `json:"workspacesCount"`
+}
+
+type workspaceQueryData struct {
+	Workspace *Workspace `json:"workspace"`
+}
+
 type templateQueryData struct {
 	Template *Template `json:"template"`
 }
@@ -432,6 +456,10 @@ type deleteTemplateMutationData struct {
 	DeleteTemplate bool `json:"deleteTemplate"`
 }
 
+type deleteWorkspaceMutationData struct {
+	DeleteWorkspace bool `json:"deleteWorkspace"`
+}
+
 type deleteResourceMutationData struct {
 	DeleteResource bool `json:"deleteResource"`
 }
@@ -446,6 +474,10 @@ type resourceActionMutationData struct {
 
 type updateTemplateMutationData struct {
 	UpdateTemplate *templateUpdateResult `json:"updateTemplate"`
+}
+
+type updateWorkspaceMutationData struct {
+	UpdateWorkspace *entityActionResult `json:"updateWorkspace"`
 }
 
 type updateIntegrationMutationData struct {
@@ -579,6 +611,11 @@ type ResourcesResult struct {
 
 type TemplatesResult struct {
 	Items []Template
+	Total int
+}
+
+type WorkspacesResult struct {
+	Items []Workspace
 	Total int
 }
 

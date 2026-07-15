@@ -34,6 +34,7 @@ var filterMenuHeaderHints = headerHints{
 	main: defaultHeaderHints.main,
 	filters: [][]menuHint{
 		{{key: "s", label: "storage"}},
+		{{key: "w", label: "workspace"}},
 		{{key: "k", label: "secret"}},
 		{{key: "i", label: "integration"}},
 		{{key: "t", label: "template"}},
@@ -69,8 +70,7 @@ var detailHeaderHints = headerHints{
 var resourceOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-		{{key: "y", label: "yaml"}, {key: "t", label: "template"}, {key: "s", label: "storage"}, {key: "v", label: "version"}},
-		{{key: "i", label: "integrations"}, {key: "k", label: "secrets"}},
+		{{key: "y", label: "yaml"}},
 		{{key: "T", label: "tree"}},
 		{{key: "A", label: "actions"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
 		{{key: "R", label: "review"}},
@@ -140,6 +140,15 @@ var workerOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
 		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
+var workspaceOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "r", label: "resources"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }
@@ -255,6 +264,10 @@ func (h *Header) SetStorageOverviewHotkeys() {
 
 func (h *Header) SetWorkerOverviewHotkeys() {
 	h.SetHotkeys(workerOverviewHints)
+}
+
+func (h *Header) SetWorkspaceOverviewHotkeys() {
+	h.SetHotkeys(workspaceOverviewHints)
 }
 
 func (h *Header) SetHotkeys(hints headerHints) {

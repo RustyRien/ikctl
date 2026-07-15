@@ -45,6 +45,7 @@ func defaultVisibleTemplateColumns() map[string]bool {
 
 func (a *App) openTemplateOverview(id string, name string) {
 	a.stopLiveLogStream()
+	a.rememberCurrentDetailState()
 
 	title := fmt.Sprintf("Template: %s", name)
 	a.clearOverviewJumpState()
@@ -55,6 +56,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
+	a.activeWorkspaceDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading template overview...")
@@ -79,6 +81,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 		} else {
 			a.activeTemplateDetail = nil
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView("Template not found")
 		}
 

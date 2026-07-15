@@ -52,15 +52,17 @@ func deleteCmd() *cobra.Command {
 			return cli.DeleteTemplate(ctx, id)
 		case "source_code_versions":
 			return cli.DeleteSourceCodeVersion(ctx, id)
+		case "workspaces":
+			return cli.DeleteWorkspace(ctx, id)
 		default:
-			return fmt.Errorf("delete is currently supported only for integrations, templates, and source_code_versions")
+			return fmt.Errorf("delete is currently supported only for integrations, templates, source_code_versions, and workspaces")
 		}
 	})
 }
 
 func entityActionCmd(use string, short string, action func(context.Context, *client.Client, string, string) error) *cobra.Command {
 	return &cobra.Command{
-		Use:   use + " <integrations|templates|source_code_versions> <name-or-id>",
+		Use:   use + " <integrations|templates|source_code_versions|workspaces> <name-or-id>",
 		Short: short,
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -88,8 +90,8 @@ func runEntityAction(cmd *cobra.Command, verb string, entity string, nameOrID st
 	if !ok {
 		return fmt.Errorf("unknown entity %q (valid: %s)", entity, strings.Join(registry.Names(), ", "))
 	}
-	if descriptor.Name != "integrations" && descriptor.Name != "templates" && descriptor.Name != "source_code_versions" {
-		return fmt.Errorf("%s is currently supported only for integrations, templates, and source_code_versions", verb)
+	if descriptor.Name != "integrations" && descriptor.Name != "templates" && descriptor.Name != "source_code_versions" && !(verb == "delete" && descriptor.Name == "workspaces") {
+		return fmt.Errorf("%s is currently supported only for integrations, templates, source_code_versions, and workspaces delete", verb)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -142,6 +144,12 @@ func actionTarget(entity string, raw any) (actionEntityTarget, error) {
 			return actionEntityTarget{}, fmt.Errorf("unexpected source code version payload type %T", raw)
 		}
 		return actionEntityTarget{Kind: entity, ID: sourceCodeVersion.ID, Name: sourceCodeVersion.GetName()}, nil
+	case "workspaces":
+		workspace, ok := raw.(client.Workspace)
+		if !ok {
+			return actionEntityTarget{}, fmt.Errorf("unexpected workspace payload type %T", raw)
+		}
+		return actionEntityTarget{Kind: entity, ID: workspace.ID, Name: workspace.Name}, nil
 	default:
 		return actionEntityTarget{}, fmt.Errorf("unsupported entity %q", entity)
 	}

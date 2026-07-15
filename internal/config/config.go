@@ -36,11 +36,13 @@ type Config struct {
 type ViewConfig struct {
 	Resources ResourceViewConfig `yaml:"resources,omitempty"`
 	Templates TemplateViewConfig `yaml:"templates,omitempty"`
+	Workspaces WorkspaceViewConfig `yaml:"workspaces,omitempty"`
 }
 
 type ResourceViewConfig struct {
 	Columns                 []string  `yaml:"columns,omitempty"`
 	StorageFilter           FilterRef `yaml:"storage_filter,omitempty"`
+	WorkspaceFilter         FilterRef `yaml:"workspace_filter,omitempty"`
 	SecretFilter            FilterRef `yaml:"secret_filter,omitempty"`
 	TemplateFilter          FilterRef `yaml:"template_filter,omitempty"`
 	SourceCodeVersionFilter FilterRef `yaml:"source_code_version_filter,omitempty"`
@@ -49,6 +51,10 @@ type ResourceViewConfig struct {
 }
 
 type TemplateViewConfig struct {
+	Columns []string `yaml:"columns,omitempty"`
+}
+
+type WorkspaceViewConfig struct {
 	Columns []string `yaml:"columns,omitempty"`
 }
 
@@ -284,14 +290,18 @@ func (c Config) DefaultSortDescending() bool {
 }
 
 func (v ViewConfig) Empty() bool {
-	return v.Resources.Empty() && v.Templates.Empty()
+	return v.Resources.Empty() && v.Templates.Empty() && v.Workspaces.Empty()
 }
 
 func (v ResourceViewConfig) Empty() bool {
-	return len(v.Columns) == 0 && v.StorageFilter.Empty() && v.SecretFilter.Empty() && v.TemplateFilter.Empty() && v.SourceCodeVersionFilter.Empty() && v.IntegrationFilter.Empty() && !v.HideDestroyed
+	return len(v.Columns) == 0 && v.StorageFilter.Empty() && v.WorkspaceFilter.Empty() && v.SecretFilter.Empty() && v.TemplateFilter.Empty() && v.SourceCodeVersionFilter.Empty() && v.IntegrationFilter.Empty() && !v.HideDestroyed
 }
 
 func (v TemplateViewConfig) Empty() bool {
+	return len(v.Columns) == 0
+}
+
+func (v WorkspaceViewConfig) Empty() bool {
 	return len(v.Columns) == 0
 }
 

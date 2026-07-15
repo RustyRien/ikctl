@@ -68,6 +68,9 @@ var entityActionDescriptions = map[string]map[string]string{
 		"disable": "Disable the integration.",
 		"delete":  "Delete the integration record.",
 	},
+	"workspace": {
+		"delete": "Delete the workspace record.",
+	},
 	"storage": {},
 	"worker":  {},
 }
@@ -78,6 +81,7 @@ var entityActionPriority = map[string]map[string]int{
 	"source_code":         {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
 	"source_code_version": {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
 	"integration":         {"enable": 10, "disable": 20, "delete": 30},
+	"workspace":           {"delete": 10},
 	"storage":             {},
 	"worker":              {},
 }
@@ -88,6 +92,7 @@ var entityActionKindLabel = map[string]string{
 	"source_code":         "source code",
 	"source_code_version": "source code version",
 	"integration":         "integration",
+	"workspace":           "workspace",
 	"storage":             "storage",
 	"worker":              "worker",
 }
@@ -130,6 +135,8 @@ func (a *App) entityActionPromptForRow(row tabledata.Row, verb string) (*entityA
 		return a.sourceCodeVersionActionPrompt(value, verb)
 	case client.Integration:
 		return a.integrationActionPrompt(value, verb)
+	case client.Workspace:
+		return a.workspaceActionPrompt(value, verb)
 	case client.Resource:
 		return a.resourceActionPrompt(value, verb)
 	default:
@@ -176,6 +183,12 @@ func (a *App) openEntityActionMenu(row tabledata.Row) {
 			return []string{"enable", "disable", "delete"}, nil
 		}, func(action string) (*entityActionPrompt, bool) {
 			return a.integrationActionPrompt(value, action)
+		})
+	case client.Workspace:
+		a.openTypedEntityActionMenu("workspace", value.ID, value.Name, func(context.Context, string) ([]string, error) {
+			return []string{"delete"}, nil
+		}, func(action string) (*entityActionPrompt, bool) {
+			return a.workspaceActionPrompt(value, action)
 		})
 	case client.Storage:
 		a.ui.OpenOverlayPrimitive("Actions", errorView("Actions are not supported for storages"))
@@ -389,6 +402,17 @@ func (a *App) integrationActionPrompt(value client.Integration, verb string) (*e
 		return nil, false
 	}
 	return &entityActionPrompt{Verb: verb, Kind: "integration", ID: value.ID, Name: value.Name, Action: action}, true
+}
+
+func (a *App) workspaceActionPrompt(value client.Workspace, verb string) (*entityActionPrompt, bool) {
+	var action func(context.Context) (string, error)
+	switch verb {
+	case "delete":
+		action = func(ctx context.Context) (string, error) { return "deleted", a.client.DeleteWorkspace(ctx, value.ID) }
+	default:
+		return nil, false
+	}
+	return &entityActionPrompt{Verb: verb, Kind: "workspace", ID: value.ID, Name: value.Name, Action: action}, true
 }
 
 func (a *App) confirmPendingEntityAction() {

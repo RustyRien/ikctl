@@ -64,6 +64,22 @@ type entityActionPrompt struct {
 	Action func(context.Context) (string, error)
 }
 
+type detailStateSnapshot struct {
+	OverviewJumpActions           map[rune]func()
+	OverviewJumpSelector          *overviewJumpSelector
+	AuditLogRows                  []tabledata.Row
+	AuditLogTable                 *tview.Table
+	OverviewTree                  *overviewTreeSelection
+	ActiveTemplateDetail          *templateDetailSelection
+	ActiveSourceCodeDetail        *entityDetailSelection
+	ActiveSourceCodeVersionDetail *entityDetailSelection
+	ActiveSecretDetail            *entityDetailSelection
+	ActiveIntegrationDetail       *entityDetailSelection
+	ActiveStorageDetail           *entityDetailSelection
+	ActiveWorkerDetail            *entityDetailSelection
+	ActiveWorkspaceDetail         *entityDetailSelection
+}
+
 type resourceReviewState struct {
 	Resource     client.Resource
 	Actions      []string
@@ -136,11 +152,19 @@ type App struct {
 	integrationFilterTable          *tview.Table
 	integrationFilterQuery          string
 	integrationFilterMode           bool
+	workspaceFilterAllRows          []client.Workspace
+	workspaceFilterRows             []client.Workspace
+	workspaceFilterTable            *tview.Table
+	workspaceFilterQuery            string
+	workspaceFilterMode             bool
 	resourceColumnsTable            *tview.Table
 	visibleResourceColumns          map[string]bool
 	templateColumnsTable            *tview.Table
 	visibleTemplateColumns          map[string]bool
+	workspaceColumnsTable           *tview.Table
+	visibleWorkspaceColumns         map[string]bool
 	resourceStorageFilter           *client.Storage
+	resourceWorkspaceFilter         *client.Workspace
 	resourceSecretFilter            *client.Secret
 	resourceTemplateFilter          *client.Template
 	resourceSourceCodeVersionFilter *client.SourceCodeVersion
@@ -153,6 +177,7 @@ type App struct {
 	activeIntegrationDetail         *entityDetailSelection
 	activeStorageDetail             *entityDetailSelection
 	activeWorkerDetail              *entityDetailSelection
+	activeWorkspaceDetail           *entityDetailSelection
 	pendingEntityAction             *entityActionPrompt
 	resourceReview                  *resourceReviewState
 	liveLogMx                       sync.Mutex
@@ -187,6 +212,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	}
 	app.visibleResourceColumns = defaultVisibleResourceColumns()
 	app.visibleTemplateColumns = defaultVisibleTemplateColumns()
+	app.visibleWorkspaceColumns = defaultVisibleWorkspaceColumns()
 	app.applySavedViewPreferences()
 
 	ordered := registry.Ordered()
@@ -223,6 +249,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetTemplateFilterFunc(app.openTemplateFilter)
 	ui.SetSourceCodeVersionFilterFunc(app.openSourceCodeVersionFilter)
 	ui.SetStorageFilterFunc(app.openStorageFilter)
+	ui.SetWorkspaceFilterFunc(app.openWorkspaceFilter)
 	ui.SetSecretFilterFunc(app.openSecretFilter)
 	ui.SetIntegrationFilterFunc(app.openIntegrationFilter)
 	ui.SetResourceColumnsFunc(app.openColumns)
@@ -235,9 +262,71 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetOverlayKeyFunc(app.handleOverlayKey)
 	ui.SetDetailKeyFunc(app.handleOverlayKey)
 	ui.SetDetailClosedFunc(app.stopLiveLogStream)
+	ui.SetDetailRestoredFunc(app.restoreDetailState)
 	ui.SetEntityTitle(app.currentEntityTitle(), entityEmptyLabel(app.activeKind))
 
 	return app
+}
+
+func (a *App) captureDetailState() *detailStateSnapshot {
+	state := &detailStateSnapshot{
+		OverviewJumpSelector:          a.overviewJumpSelector,
+		AuditLogRows:                  a.auditLogRows,
+		AuditLogTable:                 a.auditLogTable,
+		OverviewTree:                  a.overviewTree,
+		ActiveTemplateDetail:          a.activeTemplateDetail,
+		ActiveSourceCodeDetail:        a.activeSourceCodeDetail,
+		ActiveSourceCodeVersionDetail: a.activeSourceCodeVersionDetail,
+		ActiveSecretDetail:            a.activeSecretDetail,
+		ActiveIntegrationDetail:       a.activeIntegrationDetail,
+		ActiveStorageDetail:           a.activeStorageDetail,
+		ActiveWorkerDetail:            a.activeWorkerDetail,
+		ActiveWorkspaceDetail:         a.activeWorkspaceDetail,
+	}
+	if len(a.overviewJumpActions) > 0 {
+		state.OverviewJumpActions = make(map[rune]func(), len(a.overviewJumpActions))
+		for key, action := range a.overviewJumpActions {
+			state.OverviewJumpActions[key] = action
+		}
+	}
+	return state
+}
+
+func (a *App) rememberCurrentDetailState() {
+	if a.ui == nil || !a.ui.DetailVisible() {
+		return
+	}
+	a.ui.SetCurrentDetailState(a.captureDetailState())
+}
+
+func (a *App) restoreDetailState(state any) {
+	snapshot, _ := state.(*detailStateSnapshot)
+	if snapshot == nil {
+		a.clearOverviewJumpState()
+		a.auditLogRows = nil
+		a.auditLogTable = nil
+		a.overviewTree = nil
+		return
+	}
+	a.overviewJumpSelector = snapshot.OverviewJumpSelector
+	a.auditLogRows = snapshot.AuditLogRows
+	a.auditLogTable = snapshot.AuditLogTable
+	a.overviewTree = snapshot.OverviewTree
+	a.activeTemplateDetail = snapshot.ActiveTemplateDetail
+	a.activeSourceCodeDetail = snapshot.ActiveSourceCodeDetail
+	a.activeSourceCodeVersionDetail = snapshot.ActiveSourceCodeVersionDetail
+	a.activeSecretDetail = snapshot.ActiveSecretDetail
+	a.activeIntegrationDetail = snapshot.ActiveIntegrationDetail
+	a.activeStorageDetail = snapshot.ActiveStorageDetail
+	a.activeWorkerDetail = snapshot.ActiveWorkerDetail
+	a.activeWorkspaceDetail = snapshot.ActiveWorkspaceDetail
+	a.overviewJumpActions = nil
+	if len(snapshot.OverviewJumpActions) > 0 {
+		a.overviewJumpActions = make(map[rune]func(), len(snapshot.OverviewJumpActions))
+		for key, action := range snapshot.OverviewJumpActions {
+			a.overviewJumpActions[key] = action
+		}
+	}
 }
 
 func (a *App) Run() error {
@@ -312,6 +401,7 @@ func (a *App) openSelectedYAML() {
 func (a *App) openYAML(row tabledata.Row) {
 	if a.ui.DetailVisible() {
 		a.stopLiveLogStream()
+		a.rememberCurrentDetailState()
 	}
 
 	title, entityID, fetch, ok := a.yamlDetailForRow(row)
@@ -363,6 +453,10 @@ func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string
 	case client.Template:
 		return fmt.Sprintf("YAML: Template %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.Template(ctx, id)
+		}, true
+	case client.Workspace:
+		return fmt.Sprintf("YAML: Workspace %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Workspace(ctx, id)
 		}, true
 	case client.SourceCode:
 		return fmt.Sprintf("YAML: Source Code %s", valueOr(value.DisplayName(), value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
@@ -505,6 +599,9 @@ func (a *App) refresh() {
 	if a.activeKind == model.EntityTemplates {
 		headers, rows = a.projectTemplateList(headers, rows)
 	}
+	if a.activeKind == model.EntityWorkspaces {
+		headers, rows = a.projectWorkspaceList(headers, rows)
+	}
 	sortColumn, sortAsc := entityModel.SortStateForHeaders(headers)
 	a.ui.Application().QueueUpdateDraw(func() {
 		a.ui.SetEntityTitle(a.currentEntityTitle(), entityEmptyLabel(a.activeKind))
@@ -538,6 +635,9 @@ func (a *App) renderCurrentModel() {
 	if a.activeKind == model.EntityTemplates {
 		headers, rows = a.projectTemplateList(headers, rows)
 	}
+	if a.activeKind == model.EntityWorkspaces {
+		headers, rows = a.projectWorkspaceList(headers, rows)
+	}
 	sortColumn, sortAsc := entityModel.SortStateForHeaders(headers)
 	a.ui.SetEntityTitle(a.currentEntityTitle(), entityEmptyLabel(a.activeKind))
 	a.ui.Update(headers, rows, len(rows), total, lastUpdated, lastErr)
@@ -557,6 +657,13 @@ func (a *App) openSettings() {
 	a.templateFilterTable = nil
 	a.templateFilterQuery = ""
 	a.templateFilterMode = false
+	a.workspaceFilterAllRows = nil
+	a.workspaceFilterRows = nil
+	a.workspaceFilterTable = nil
+	a.workspaceFilterQuery = ""
+	a.workspaceFilterMode = false
+	a.templateColumnsTable = nil
+	a.workspaceColumnsTable = nil
 	a.integrationFilterAllRows = nil
 	a.integrationFilterRows = nil
 	a.integrationFilterTable = nil
@@ -845,6 +952,29 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 		return false
 	}
 
+	if a.workspaceColumnsTable != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.toggleSelectedWorkspaceColumn()
+			return true
+		case tcell.KeyEsc:
+			a.workspaceColumnsTable = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case ' ':
+				a.toggleSelectedWorkspaceColumn()
+				return true
+			case 'q':
+				a.workspaceColumnsTable = nil
+				return false
+			}
+		}
+		return false
+	}
+
 	if a.integrationFilterTable != nil {
 		if a.integrationFilterMode {
 			switch event.Key() {
@@ -897,6 +1027,65 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				a.integrationFilterTable = nil
 				a.integrationFilterQuery = ""
 				a.integrationFilterMode = false
+				a.overviewTree = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.workspaceFilterTable != nil {
+		if a.workspaceFilterMode {
+			switch event.Key() {
+			case tcell.KeyEsc:
+				a.workspaceFilterMode = false
+				a.renderWorkspaceFilterOverlay()
+				return true
+			case tcell.KeyBackspace, tcell.KeyBackspace2:
+				a.workspaceFilterQuery = trimLastRune(a.workspaceFilterQuery)
+				a.renderWorkspaceFilterOverlay()
+				return true
+			case tcell.KeyEnter:
+				a.applySelectedWorkspaceFilter()
+				return true
+			case tcell.KeyRune:
+				if event.Rune() != '/' {
+					a.workspaceFilterQuery += string(event.Rune())
+					a.renderWorkspaceFilterOverlay()
+				}
+				return true
+			}
+		}
+
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedWorkspaceFilter()
+			return true
+		case tcell.KeyEsc:
+			a.workspaceFilterAllRows = nil
+			a.workspaceFilterRows = nil
+			a.workspaceFilterTable = nil
+			a.workspaceFilterQuery = ""
+			a.workspaceFilterMode = false
+			a.overviewTree = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '/':
+				a.workspaceFilterMode = true
+				a.renderWorkspaceFilterOverlay()
+				return true
+			case 'c':
+				a.clearWorkspaceFilter()
+				return true
+			case 'q':
+				a.workspaceFilterAllRows = nil
+				a.workspaceFilterRows = nil
+				a.workspaceFilterTable = nil
+				a.workspaceFilterQuery = ""
+				a.workspaceFilterMode = false
 				a.overviewTree = nil
 				return false
 			}
@@ -1226,10 +1415,12 @@ func (a *App) applySelectedOverviewJump() {
 
 func (a *App) openLogs(row tabledata.Row) {
 	if selection, ok := row.Raw.(auditLogSelection); ok {
+		a.rememberCurrentDetailState()
 		a.openAuditLogDetail(selection)
 		return
 	}
 
+	a.rememberCurrentDetailState()
 	a.stopLiveLogStream()
 
 	entityID, entityName, entityLabel, ok := auditEntityRowMeta(row)
@@ -1280,6 +1471,7 @@ func (a *App) openResourceLogs(title string, resourceItem client.Resource) {
 }
 
 func (a *App) openAuditLogs(row tabledata.Row) {
+	a.rememberCurrentDetailState()
 	a.stopLiveLogStream()
 
 	entityID, entityName, entityLabel, ok := auditEntityRowMeta(row)
@@ -1343,6 +1535,7 @@ func (a *App) openSelectedAuditLog() {
 }
 
 func (a *App) openAuditLogDetail(selection auditLogSelection) {
+	a.rememberCurrentDetailState()
 	a.stopLiveLogStream()
 
 	title := fmt.Sprintf("Logs: %s / %s", selection.EntityName, selection.Action)
@@ -1687,6 +1880,8 @@ func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, 
 		return value.ID, value.Name, "resource", true
 	case client.Template:
 		return value.ID, value.Name, "template", true
+	case client.Workspace:
+		return value.ID, value.Name, "workspace", true
 	case client.SourceCode:
 		return value.ID, valueOr(value.DisplayName(), value.ID), "source_code", true
 	case client.SourceCodeVersion:

@@ -29,6 +29,14 @@ func TestEntityActionPromptForRowSupportsEntities(t *testing.T) {
 		t.Fatalf("unexpected integration prompt: %#v", integrationPrompt)
 	}
 
+	workspacePrompt, ok := a.entityActionPromptForRow(tabledata.Row{Raw: client.Workspace{ID: "w1", Name: "platform"}}, "delete")
+	if !ok || workspacePrompt == nil {
+		t.Fatal("expected workspace delete prompt")
+	}
+	if workspacePrompt.Kind != "workspace" || workspacePrompt.Verb != "delete" || workspacePrompt.ID != "w1" {
+		t.Fatalf("unexpected workspace prompt: %#v", workspacePrompt)
+	}
+
 	resourcePrompt, ok := a.entityActionPromptForRow(tabledata.Row{Raw: client.Resource{ID: "r1", Name: "res"}}, "disable")
 	if !ok || resourcePrompt == nil {
 		t.Fatal("expected resource disable prompt")
@@ -69,6 +77,9 @@ func TestActionPromptFactoriesReturnAction(t *testing.T) {
 		}},
 		{name: "integration enable", mk: func() (*entityActionPrompt, bool) {
 			return a.integrationActionPrompt(client.Integration{ID: "i1", Name: "aws"}, "enable")
+		}},
+		{name: "workspace delete", mk: func() (*entityActionPrompt, bool) {
+			return a.workspaceActionPrompt(client.Workspace{ID: "w1", Name: "platform"}, "delete")
 		}},
 		{name: "resource execute", mk: func() (*entityActionPrompt, bool) {
 			return a.resourceActionPrompt(client.Resource{ID: "r1", Name: "redis"}, "execute")
@@ -146,6 +157,7 @@ func TestYAMLDetailForRowSupportsEntities(t *testing.T) {
 		{name: "resource", row: tabledata.Row{Raw: client.Resource{ID: "r1", Name: "redis"}}, wantTitle: "YAML: Resource redis"},
 		{name: "template", row: tabledata.Row{Raw: client.Template{ID: "t1", Name: "base"}}, wantTitle: "YAML: Template base"},
 		{name: "integration", row: tabledata.Row{Raw: client.Integration{ID: "i1", Name: "aws"}}, wantTitle: "YAML: Integration aws"},
+		{name: "workspace", row: tabledata.Row{Raw: client.Workspace{ID: "w1", Name: "platform"}}, wantTitle: "YAML: Workspace platform"},
 		{name: "storage", row: tabledata.Row{Raw: client.Storage{ID: "st1", Name: "state"}}, wantTitle: "YAML: Storage state"},
 		{name: "worker", row: tabledata.Row{Raw: client.Worker{ID: "w1", Name: "runner"}}, wantTitle: "YAML: Worker runner"},
 	}
@@ -238,6 +250,15 @@ func TestIntegrationOverviewHintIncludesResourcesAndAudit(t *testing.T) {
 	}
 }
 
+func TestWorkspaceOverviewHintIncludesResourcesAndAudit(t *testing.T) {
+	hint := workspaceOverviewHint(client.Workspace{ID: "w1", Name: "platform"})
+	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "D delete", "E edit"} {
+		if !strings.Contains(hint, want) {
+			t.Fatalf("workspace overview hint missing %q in %q", want, hint)
+		}
+	}
+}
+
 func TestStorageOverviewHintIncludesResourcesAndAudit(t *testing.T) {
 	hint := storageOverviewHint(client.Storage{ID: "st1", Name: "tf-state"})
 	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "E edit"} {
@@ -253,6 +274,13 @@ func TestResourceTemplateHintIncludesEdit(t *testing.T) {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("resource hint missing %q in %q", want, hint)
 		}
+	}
+}
+
+func TestResourceTemplateHintIncludesWorkspaceWhenAvailable(t *testing.T) {
+	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Workspace: &client.Workspace{ID: "w1", Name: "platform"}})
+	if !strings.Contains(hint, "w workspace") {
+		t.Fatalf("resource hint missing workspace in %q", hint)
 	}
 }
 

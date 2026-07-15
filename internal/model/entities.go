@@ -21,6 +21,7 @@ const (
 	EntitySourceCodeVersions EntityKind = "source_code_versions"
 	EntitySecrets            EntityKind = "secrets"
 	EntityTemplates          EntityKind = "templates"
+	EntityWorkspaces         EntityKind = "workspaces"
 	EntityIntegrations       EntityKind = "integrations"
 	EntityStorages           EntityKind = "storages"
 	EntityWorkers            EntityKind = "workers"

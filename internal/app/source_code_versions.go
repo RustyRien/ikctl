@@ -12,6 +12,7 @@ import (
 
 func (a *App) openSourceCodeVersionOverview(id string, name string) {
 	a.stopLiveLogStream()
+	a.rememberCurrentDetailState()
 
 	title := fmt.Sprintf("Source Code Version: %s", valueOr(name, id))
 	a.clearOverviewJumpState()
@@ -22,6 +23,7 @@ func (a *App) openSourceCodeVersionOverview(id string, name string) {
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
+	a.activeWorkspaceDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading source code version overview...")
@@ -40,6 +42,7 @@ func (a *App) openSourceCodeVersionOverview(id string, name string) {
 		if err != nil {
 			a.activeSourceCodeVersionDetail = nil
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView(fmt.Sprintf("Failed to load source code version overview.\n\n%v", err))
 		} else if full != nil {
 			a.activeSourceCodeVersionDetail = &entityDetailSelection{ID: full.ID, Name: full.GetName(), Kind: "source_code_versions"}
@@ -48,6 +51,7 @@ func (a *App) openSourceCodeVersionOverview(id string, name string) {
 		} else {
 			a.activeSourceCodeVersionDetail = nil
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView("Source code version not found")
 		}
 

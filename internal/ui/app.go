@@ -49,6 +49,7 @@ type App struct {
 	sortFn                    func(int, bool)
 	loadMoreFn                func()
 	storageFilterFn           func()
+	workspaceFilterFn         func()
 	secretFilterFn            func()
 	templateFilterFn          func()
 	sourceCodeVersionFilterFn func()
@@ -63,6 +64,7 @@ type App struct {
 	overlayKeyFn              func(*tcell.EventKey) bool
 	detailKeyFn               func(*tcell.EventKey) bool
 	detailClosedFn            func()
+	detailRestoredFn          func(any)
 	statusBase                string
 	loadingMx                 sync.Mutex
 	loadingCount              int
@@ -76,6 +78,7 @@ type detailPage struct {
 	title     string
 	primitive tview.Primitive
 	hotkeys   detailHotkeys
+	state     any
 }
 
 type detailHotkeys int
@@ -93,6 +96,7 @@ const (
 	detailHotkeysIntegrationOverview
 	detailHotkeysStorageOverview
 	detailHotkeysWorkerOverview
+	detailHotkeysWorkspaceOverview
 )
 
 var loadingFrames = []string{"|", "/", "-", "\\"}
@@ -289,6 +293,10 @@ func (a *App) SetStorageFilterFunc(fn func()) {
 	a.storageFilterFn = fn
 }
 
+func (a *App) SetWorkspaceFilterFunc(fn func()) {
+	a.workspaceFilterFn = fn
+}
+
 func (a *App) SetSecretFilterFunc(fn func()) {
 	a.secretFilterFn = fn
 }
@@ -343,6 +351,17 @@ func (a *App) SetDetailKeyFunc(fn func(*tcell.EventKey) bool) {
 
 func (a *App) SetDetailClosedFunc(fn func()) {
 	a.detailClosedFn = fn
+}
+
+func (a *App) SetDetailRestoredFunc(fn func(any)) {
+	a.detailRestoredFn = fn
+}
+
+func (a *App) SetCurrentDetailState(state any) {
+	if len(a.detailHistory) == 0 {
+		return
+	}
+	a.detailHistory[len(a.detailHistory)-1].state = state
 }
 
 func (a *App) SetEntityTitle(title string, emptyLabel string) {
@@ -493,6 +512,12 @@ func (a *App) SetWorkerOverviewHotkeys() {
 	a.updateDetailHotkeys(detailHotkeysWorkerOverview)
 }
 
+func (a *App) SetWorkspaceOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetWorkspaceOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysWorkspaceOverview)
+}
+
 func (a *App) CloseDetail() {
 	if a.detailClosedFn != nil {
 		a.detailClosedFn()
@@ -509,6 +534,9 @@ func (a *App) CloseDetail() {
 	a.ResetHeaderHotkeys()
 	a.updateBreadcrumbs()
 	a.app.SetFocus(a.table.Widget())
+	if a.detailRestoredFn != nil {
+		a.detailRestoredFn(nil)
+	}
 }
 
 func (a *App) CloseOverlay() {
@@ -617,6 +645,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				a.exitFilterMenuMode()
 				if a.storageFilterFn != nil {
 					a.storageFilterFn()
+				}
+				return nil
+			case 'w':
+				a.exitFilterMenuMode()
+				if a.workspaceFilterFn != nil {
+					a.workspaceFilterFn()
 				}
 				return nil
 			case 'k':
@@ -848,6 +882,16 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 		case 'q':
 			a.Stop()
 			return nil
+		case 'w':
+			if a.navFn != nil {
+				a.navFn('w')
+			}
+			return nil
+		case 'W':
+			if a.navFn != nil {
+				a.navFn('W')
+			}
+			return nil
 		case '/':
 			a.filterMode = true
 			a.filterText = a.table.Filter()
@@ -1043,6 +1087,9 @@ func (a *App) restoreDetailPage(page detailPage) {
 	a.showDetailPage(page.title, page.primitive)
 	a.applyDetailHotkeys(page.hotkeys)
 	a.app.SetFocus(page.primitive)
+	if a.detailRestoredFn != nil {
+		a.detailRestoredFn(page.state)
+	}
 }
 
 func (a *App) updateBreadcrumbs() {
@@ -1096,6 +1143,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetStorageOverviewHotkeys()
 	case detailHotkeysWorkerOverview:
 		a.header.SetWorkerOverviewHotkeys()
+	case detailHotkeysWorkspaceOverview:
+		a.header.SetWorkspaceOverviewHotkeys()
 	default:
 		a.header.ResetHotkeys()
 	}

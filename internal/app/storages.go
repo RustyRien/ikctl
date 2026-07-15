@@ -12,6 +12,7 @@ import (
 
 func (a *App) openStorageOverview(id string, name string) {
 	a.stopLiveLogStream()
+	a.rememberCurrentDetailState()
 
 	title := fmt.Sprintf("Storage: %s", name)
 	a.clearOverviewJumpState()
@@ -22,6 +23,7 @@ func (a *App) openStorageOverview(id string, name string) {
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = &entityDetailSelection{ID: id, Name: name, Kind: "storages"}
 	a.activeWorkerDetail = nil
+	a.activeWorkspaceDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading storage overview...")
@@ -46,6 +48,7 @@ func (a *App) openStorageOverview(id string, name string) {
 		} else {
 			a.activeStorageDetail = nil
 			a.activeWorkerDetail = nil
+			a.activeWorkspaceDetail = nil
 			primitive = errorView("Storage not found")
 		}
 

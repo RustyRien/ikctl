@@ -23,6 +23,7 @@ var availableCommands = []string{
 	"refresh",
 	"reset-filters",
 	"resources",
+	"workspace-filter",
 	"secret-filter",
 	"secrets",
 	"source-codes",
@@ -31,6 +32,7 @@ var availableCommands = []string{
 	"storage-filter",
 	"storages",
 	"workers",
+	"workspaces",
 	"template-filter",
 	"version-filter",
 	"templates",
@@ -57,10 +59,12 @@ func (a *App) runCommand(input string) {
 		a.handleNav('k')
 	case "s", "stg", "storage", "storages":
 		a.handleNav('s')
-	case "w", "wrk", "worker", "workers":
+	case "w", "ws", "workspace", "workspaces":
 		a.handleNav('w')
 	case "t", "tpl", "template", "templates":
 		a.handleNav('t')
+	case "wrk", "worker", "workers":
+		a.handleNav('W')
 	case "i", "int", "integration", "integrations":
 		a.handleNav('i')
 	case "refresh", "reload":
@@ -113,6 +117,8 @@ func (a *App) runCommand(input string) {
 		a.openSourceCodeVersionFilter()
 	case "storage-filter", "sf":
 		a.openStorageFilter()
+	case "workspace-filter", "wf":
+		a.openWorkspaceFilter()
 	case "secret-filter", "kf", "secf":
 		a.openSecretFilter()
 	case "integration-filter", "if":
@@ -164,7 +170,7 @@ func (a *App) suggestCommand(input string) (string, []string) {
 }
 
 func (a *App) commandError(command string, message string) {
-	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :source-codes\n  :source-code-versions\n  :secrets\n  :templates\n  :integrations\n  :storages\n  :workers\n  :refresh\n  :enable\n  :disable\n  :delete\n  :edit\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :storage-filter\n  :secret-filter\n  :template-filter\n  :version-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
+	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :source-codes\n  :source-code-versions\n  :secrets\n  :templates\n  :workspaces\n  :integrations\n  :storages\n  :workers\n  :refresh\n  :enable\n  :disable\n  :delete\n  :edit\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :storage-filter\n  :workspace-filter\n  :secret-filter\n  :template-filter\n  :version-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
 	a.ui.OpenOverlayPrimitive("Command", view)
 }
 
