@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/electrolux-oss/ik-tui/internal/client"
@@ -105,6 +106,9 @@ type App struct {
 	activeTemplateDetail      *templateDetailSelection
 	activeIntegrationDetail   *entityDetailSelection
 	pendingEntityAction       *entityActionPrompt
+	liveLogMx                 sync.Mutex
+	liveLogCancel             context.CancelFunc
+	liveLogSession            int
 }
 
 func New(cfg config.Config, build BuildInfo, activeEntity string) *App {
@@ -174,6 +178,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetSettingsFunc(app.openSettings)
 	ui.SetOverlayKeyFunc(app.handleOverlayKey)
 	ui.SetDetailKeyFunc(app.handleOverlayKey)
+	ui.SetDetailClosedFunc(app.stopLiveLogStream)
 	ui.SetEntityTitle(app.currentEntityTitle(), entityEmptyLabel(app.activeKind))
 
 	return app
@@ -811,6 +816,8 @@ func (a *App) openLogs(row tabledata.Row) {
 		return
 	}
 
+	a.stopLiveLogStream()
+
 	entityID, entityName, entityLabel, ok := auditEntityRowMeta(row)
 	if !ok {
 		return
@@ -820,6 +827,10 @@ func (a *App) openLogs(row tabledata.Row) {
 	a.clearOverviewJumpState()
 	a.auditLogRows = nil
 	a.auditLogTable = nil
+	if resourceItem, ok := row.Raw.(client.Resource); ok {
+		a.openResourceLogs(title, resourceItem)
+		return
+	}
 	a.ui.OpenDetail(title, fmt.Sprintf("Loading %s logs...", strings.ToLower(entityLabel)))
 	a.ui.SetDetailHotkeys()
 
@@ -845,7 +856,18 @@ func (a *App) openLogs(row tabledata.Row) {
 	}(entityID, entityLabel)
 }
 
+func (a *App) openResourceLogs(title string, resourceItem client.Resource) {
+	session := a.nextLiveLogSession()
+	textView := newStreamingLogTextView()
+	textView.SetText("Loading resource logs...")
+	a.ui.OpenDetailPrimitive(title, textView)
+	a.ui.SetDetailHotkeys()
+	a.streamResourceLogsIntoView(session, resourceItem.ID, textView, 200, formatStreamingLogs, "Failed to load resource logs.")
+}
+
 func (a *App) openAuditLogs(row tabledata.Row) {
+	a.stopLiveLogStream()
+
 	entityID, entityName, entityLabel, ok := auditEntityRowMeta(row)
 	if !ok {
 		return
@@ -907,6 +929,8 @@ func (a *App) openSelectedAuditLog() {
 }
 
 func (a *App) openAuditLogDetail(selection auditLogSelection) {
+	a.stopLiveLogStream()
+
 	title := fmt.Sprintf("Logs: %s / %s", selection.EntityName, selection.Action)
 	a.clearOverviewJumpState()
 	a.auditLogRows = nil
@@ -949,19 +973,212 @@ func formatLogs(logs []client.Log, total int, noColors bool, entityLabel string)
 	return strings.Join(lines, "\n")
 }
 
+func formatStreamingLogs(logs []client.Log, total int, noColors bool) string {
+	if len(logs) == 0 {
+		return "Following live output for this resource. Waiting for logs..."
+	}
+
+	lines := []string{fmt.Sprintf("Showing %d of %d logs. Following live output...", len(logs), total), ""}
+	for i := len(logs) - 1; i >= 0; i-- {
+		lines = append(lines, formatLogRow(logs[i], noColors))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatRecentLogs(logs []client.Log, _ int, noColors bool) string {
+	if len(logs) == 0 {
+		return "Waiting for logs..."
+	}
+
+	lines := make([]string, 0, len(logs))
+	for i := len(logs) - 1; i >= 0; i-- {
+		lines = append(lines, formatLogRow(logs[i], noColors))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func formatLogRow(log client.Log, noColors bool) string {
 	prefix := log.CreatedAt.Format(time.RFC3339) + "  "
 	indent := strings.Repeat(" ", len(prefix))
-	bodyLines := strings.Split(log.Data, "\n")
-	for i, line := range bodyLines {
-		bodyLines[i] = logLevelPrefixRX.ReplaceAllString(line, "")
-	}
-	body := strings.Join(bodyLines, "\n"+indent)
+	body := strings.ReplaceAll(normalizeLogBody(log.Data), "\n", "\n"+indent)
 	if noColors {
 		return prefix + body
 	}
 	colored := logLevelANSI(log.Level) + prefix + body + "\x1b[0m"
 	return tview.TranslateANSI(colored)
+}
+
+func formatStreamLogRow(message client.LogStreamMessage, noColors bool) string {
+	body := normalizeLogBody(message.Data)
+	if noColors {
+		return body
+	}
+	return tview.TranslateANSI(logLevelANSI(message.Level) + body + "\x1b[0m")
+}
+
+func normalizeLogBody(data string) string {
+	bodyLines := strings.Split(data, "\n")
+	for i, line := range bodyLines {
+		bodyLines[i] = logLevelPrefixRX.ReplaceAllString(line, "")
+	}
+	return strings.Join(bodyLines, "\n")
+}
+
+type liveLogDeduper struct {
+	pending map[string]int
+	active  bool
+}
+
+func newLiveLogDeduper(history []client.Log) *liveLogDeduper {
+	if len(history) == 0 {
+		return &liveLogDeduper{}
+	}
+
+	start := max(0, len(history)-50)
+	pending := make(map[string]int, len(history)-start)
+	for _, log := range history[start:] {
+		pending[liveLogMessageKey(log.Level, log.Data)]++
+	}
+
+	return &liveLogDeduper{pending: pending, active: len(pending) > 0}
+}
+
+type logHistoryFormatter func(logs []client.Log, total int, noColors bool) string
+
+func newStreamingLogTextView() *tview.TextView {
+	view := tview.NewTextView()
+	view.SetDynamicColors(true)
+	view.SetScrollable(true)
+	view.SetWrap(true)
+	view.SetMaxLines(400)
+	return view
+}
+
+func (a *App) streamResourceLogsIntoView(session int, resourceID string, textView *tview.TextView, historyLimit int, formatter logHistoryFormatter, errorPrefix string) {
+	go func(session int, resourceID string) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		logs, total, err := a.client.LogsForEntity(ctx, resourceID, []int{0, historyLimit})
+		if !a.isLiveLogSessionCurrent(session) {
+			return
+		}
+		if err != nil {
+			a.ui.Application().QueueUpdateDraw(func() {
+				if !a.isLiveLogSessionCurrent(session) {
+					return
+				}
+				textView.SetText(fmt.Sprintf("%s\n\n%v", errorPrefix, err))
+			})
+			return
+		}
+
+		deduper := newLiveLogDeduper(logs)
+		a.ui.Application().QueueUpdateDraw(func() {
+			if !a.isLiveLogSessionCurrent(session) {
+				return
+			}
+			textView.SetText(formatter(logs, total, a.config.NoColors))
+			textView.ScrollToEnd()
+		})
+
+		streamCtx, streamCancel := context.WithCancel(a.ctx)
+		if !a.activateLiveLogSession(session, streamCancel) {
+			return
+		}
+
+		err = a.client.StreamLogs(streamCtx, "resource", resourceID, func(message client.LogStreamMessage) error {
+			if deduper.ShouldSuppress(message) {
+				return nil
+			}
+			formatted := formatStreamLogRow(message, a.config.NoColors)
+			a.ui.Application().QueueUpdateDraw(func() {
+				if !a.isLiveLogSessionCurrent(session) {
+					return
+				}
+				_, _ = fmt.Fprintln(textView, formatted)
+				textView.ScrollToEnd()
+			})
+			return nil
+		})
+		if err != nil && streamCtx.Err() == nil && a.isLiveLogSessionCurrent(session) {
+			a.ui.Application().QueueUpdateDraw(func() {
+				if !a.isLiveLogSessionCurrent(session) {
+					return
+				}
+				_, _ = fmt.Fprintf(textView, "\n\n[red]Live log stream ended[-]\n%v\n", err)
+				textView.ScrollToEnd()
+			})
+		}
+	}(session, resourceID)
+}
+
+func (d *liveLogDeduper) ShouldSuppress(message client.LogStreamMessage) bool {
+	if d == nil || !d.active {
+		return false
+	}
+
+	key := liveLogMessageKey(message.Level, message.Data)
+	if count := d.pending[key]; count > 0 {
+		if count == 1 {
+			delete(d.pending, key)
+		} else {
+			d.pending[key] = count - 1
+		}
+		return true
+	}
+
+	d.active = false
+	clear(d.pending)
+	return false
+}
+
+func liveLogMessageKey(level string, data string) string {
+	return strings.ToLower(strings.TrimSpace(level)) + "\x00" + normalizeLogBody(data)
+}
+
+func (a *App) nextLiveLogSession() int {
+	a.liveLogMx.Lock()
+	cancel := a.liveLogCancel
+	a.liveLogCancel = nil
+	a.liveLogSession++
+	session := a.liveLogSession
+	a.liveLogMx.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	return session
+}
+
+func (a *App) activateLiveLogSession(session int, cancel context.CancelFunc) bool {
+	a.liveLogMx.Lock()
+	defer a.liveLogMx.Unlock()
+	if a.liveLogSession != session {
+		cancel()
+		return false
+	}
+	a.liveLogCancel = cancel
+	return true
+}
+
+func (a *App) isLiveLogSessionCurrent(session int) bool {
+	a.liveLogMx.Lock()
+	defer a.liveLogMx.Unlock()
+	return a.liveLogSession == session
+}
+
+func (a *App) stopLiveLogStream() {
+	a.liveLogMx.Lock()
+	cancel := a.liveLogCancel
+	a.liveLogCancel = nil
+	a.liveLogSession++
+	a.liveLogMx.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func logLevelANSI(level string) string {

@@ -43,6 +43,8 @@ func defaultVisibleTemplateColumns() map[string]bool {
 }
 
 func (a *App) openTemplateOverview(id string, name string) {
+	a.stopLiveLogStream()
+
 	title := fmt.Sprintf("Template: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = &templateDetailSelection{ID: id, Name: name}
@@ -79,6 +81,8 @@ func (a *App) openTemplateOverview(id string, name string) {
 }
 
 func (a *App) openTemplateTree(id string, name string) {
+	a.stopLiveLogStream()
+
 	title := fmt.Sprintf("Template Tree: %s", name)
 	a.auditLogRows = nil
 	a.auditLogTable = nil

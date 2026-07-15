@@ -13,6 +13,8 @@ import (
 )
 
 func (a *App) openOverview(row tabledata.Row) {
+	a.stopLiveLogStream()
+
 	switch value := row.Raw.(type) {
 	case client.Resource:
 		a.openResourceOverview(value)
@@ -24,6 +26,8 @@ func (a *App) openOverview(row tabledata.Row) {
 }
 
 func (a *App) handleNav(key rune) {
+	a.stopLiveLogStream()
+
 	var next model.EntityKind
 	switch key {
 	case 'r':

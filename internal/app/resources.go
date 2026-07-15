@@ -294,6 +294,8 @@ func (a *App) resourceFilters() map[string]any {
 }
 
 func (a *App) openResourceOverview(resource client.Resource) {
+	session := a.nextLiveLogSession()
+
 	title := fmt.Sprintf("Resource: %s", resource.Name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
@@ -303,7 +305,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	a.ui.OpenDetail(title, "Loading resource overview...")
 	a.ui.SetResourceOverviewHotkeys()
 
-	go func() {
+	go func(session int) {
 		done := a.ui.BeginLoading()
 		defer done()
 
@@ -312,11 +314,12 @@ func (a *App) openResourceOverview(resource client.Resource) {
 
 		full, err := a.client.Resource(ctx, resource.ID)
 		var primitive tview.Primitive
+		var lastLogView *tview.TextView
 		var jumpActions map[rune]func()
 		if err != nil {
 			primitive = errorView(fmt.Sprintf("Failed to load resource overview.\n\n%v", err))
 		} else if full != nil {
-			primitive = resourceOverviewView(*full)
+			primitive, lastLogView = resourceOverviewView(*full)
 			jumpActions = a.resourceOverviewJumpActions(*full)
 			if full.Template != nil && full.Template.ID != "" {
 				if jumpActions == nil {
@@ -336,14 +339,20 @@ func (a *App) openResourceOverview(resource client.Resource) {
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
+			if !a.isLiveLogSessionCurrent(session) {
+				return
+			}
 			a.clearOverviewJumpState()
 			for key, action := range jumpActions {
 				a.setOverviewJumpAction(key, action)
 			}
 			a.ui.OpenDetailPrimitive(title, primitive)
 			a.ui.SetResourceOverviewHotkeys()
+			if lastLogView != nil && full != nil {
+				a.streamResourceLogsIntoView(session, full.ID, lastLogView, 20, formatRecentLogs, "Failed to load recent logs.")
+			}
 		})
-	}()
+	}(session)
 }
 
 func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]func() {
@@ -374,6 +383,8 @@ func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]fun
 }
 
 func (a *App) openResourceTree(id string, name string) {
+	a.stopLiveLogStream()
+
 	title := fmt.Sprintf("Resource Tree: %s", name)
 	a.auditLogRows = nil
 	a.auditLogTable = nil
@@ -513,7 +524,7 @@ func (a *App) projectResourceList(_ []tabledata.Header, rows []tabledata.Row) ([
 	return projectedHeaders, projectedRows
 }
 
-func resourceOverviewView(resource client.Resource) tview.Primitive {
+func resourceOverviewView(resource client.Resource) (tview.Primitive, *tview.TextView) {
 	summary := kvTable("Summary", [][2]string{
 		{"Name", resource.Name},
 		{"ID", resource.ID},
@@ -554,8 +565,12 @@ func resourceOverviewView(resource client.Resource) tview.Primitive {
 	integrations := simpleList("Integrations", integrationLines(resource.Integrations))
 	variables := mapListTable("Variables", resource.Variables)
 	outputs := mapListTable("Outputs", resource.Outputs)
-	tags := mapListTable("Dependency Tags", resource.DependencyTags)
-	config := mapListTable("Dependency Config", resource.DependencyConfig)
+	dependencies := dependencyDetailsView(resource.DependencyTags, resource.DependencyConfig)
+
+	lastLogView := newStreamingLogTextView()
+	lastLogView.SetBorder(true)
+	lastLogView.SetTitle("Last Log")
+	lastLogView.SetText("Waiting for logs...")
 
 	top := tview.NewFlex().
 		AddItem(summary, 0, 1, false).
@@ -570,8 +585,8 @@ func resourceOverviewView(resource client.Resource) tview.Primitive {
 	bottom := tview.NewFlex().
 		AddItem(variables, 0, 1, false).
 		AddItem(outputs, 0, 1, false).
-		AddItem(tags, 0, 1, false).
-		AddItem(config, 0, 1, false)
+		AddItem(dependencies, 0, 1, false).
+		AddItem(lastLogView, 0, 1, false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(top, 12, 0, true)
@@ -579,7 +594,40 @@ func resourceOverviewView(resource client.Resource) tview.Primitive {
 	root.AddItem(bottom, 0, 1, false)
 	root.AddItem(overviewFooter(resourceTemplateHint(resource)), 1, 0, false)
 
-	return root
+	return root, lastLogView
+}
+
+func dependencyDetailsView(tags []map[string]any, config []map[string]any) tview.Primitive {
+	view := tview.NewTextView()
+	view.SetBorder(true)
+	view.SetTitle("Dependencies")
+	view.SetWrap(true)
+	view.SetDynamicColors(true)
+	view.SetText(strings.Join([]string{
+		"[::b]Tags[::-]",
+		formattedMapListSection(tags),
+		"",
+		"[::b]Config[::-]",
+		formattedMapListSection(config),
+	}, "\n"))
+	return view
+}
+
+func formattedMapListSection(items []map[string]any) string {
+	if len(items) == 0 {
+		return "-"
+	}
+
+	lines := make([]string, 0, len(items))
+	for index, item := range items {
+		keys := sortedKeys([]map[string]any{item})
+		parts := make([]string, 0, len(keys))
+		for _, key := range keys {
+			parts = append(parts, fmt.Sprintf("%s=%s", key, stringify(item[key])))
+		}
+		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, ", ")))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func templateFilterView(templates []client.Template, shown int, total int, selectedID string, query string, filterMode bool) (tview.Primitive, *tview.Table) {

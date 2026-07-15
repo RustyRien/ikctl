@@ -10,6 +10,8 @@ import (
 )
 
 func (a *App) openIntegrationOverview(id string, name string) {
+	a.stopLiveLogStream()
+
 	title := fmt.Sprintf("Integration: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil

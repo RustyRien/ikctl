@@ -55,6 +55,7 @@ type App struct {
 	commandSuggestFn    func(string) (string, []string)
 	overlayKeyFn        func(*tcell.EventKey) bool
 	detailKeyFn         func(*tcell.EventKey) bool
+	detailClosedFn      func()
 	statusBase          string
 	loadingMx           sync.Mutex
 	loadingCount        int
@@ -300,6 +301,10 @@ func (a *App) SetDetailKeyFunc(fn func(*tcell.EventKey) bool) {
 	a.detailKeyFn = fn
 }
 
+func (a *App) SetDetailClosedFunc(fn func()) {
+	a.detailClosedFn = fn
+}
+
 func (a *App) SetEntityTitle(title string, emptyLabel string) {
 	a.listTitle = title
 	a.table.Widget().SetTitle(title)
@@ -398,6 +403,9 @@ func (a *App) SetTemplateOverviewHotkeys() {
 }
 
 func (a *App) CloseDetail() {
+	if a.detailClosedFn != nil {
+		a.detailClosedFn()
+	}
 	if len(a.detailHistory) > 1 {
 		a.detailHistory = a.detailHistory[:len(a.detailHistory)-1]
 		page := a.detailHistory[len(a.detailHistory)-1]
