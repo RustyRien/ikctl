@@ -81,6 +81,20 @@ func StorageInputFromYAML(data []byte) (map[string]any, error) {
 	return input, nil
 }
 
+func SourceCodeInputFromYAML(data []byte) (map[string]any, error) {
+	decoded, err := ParseYAMLMap(data)
+	if err != nil {
+		return nil, err
+	}
+	input := map[string]any{}
+	copyOptional(input, decoded,
+		fieldPair{"description", "description"},
+		fieldPair{"labels", "labels"},
+	)
+	copyNilableID(input, decoded, "integrationId", "integration_id", "integration", "integration")
+	return input, nil
+}
+
 func ResourceYAML(raw any) ([]byte, error) {
 	value, ok := raw.(client.Resource)
 	if !ok {
@@ -144,6 +158,18 @@ func StorageYAML(raw any) ([]byte, error) {
 	return YAMLBytes(map[string]any{
 		"description": value.Description,
 		"labels":      value.Labels,
+	})
+}
+
+func SourceCodeYAML(raw any) ([]byte, error) {
+	value, ok := raw.(client.SourceCode)
+	if !ok {
+		return nil, fmt.Errorf("expected source code, got %T", raw)
+	}
+	return YAMLBytes(map[string]any{
+		"description":    value.Description,
+		"integration_id": normalizeNilString(value.IntegrationID),
+		"labels":         value.Labels,
 	})
 }
 

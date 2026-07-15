@@ -51,6 +51,12 @@ var entityActionDescriptions = map[string]map[string]string{
 		"disable": "Disable the template.",
 		"delete":  "Delete the template record.",
 	},
+	"source_code": {
+		"enable":  "Enable the source code repository.",
+		"disable": "Disable the source code repository.",
+		"sync":    "Synchronize the source code repository with the remote provider.",
+		"delete":  "Delete the source code repository record.",
+	},
 	"integration": {
 		"enable":  "Enable the integration.",
 		"disable": "Disable the integration.",
@@ -62,14 +68,25 @@ var entityActionDescriptions = map[string]map[string]string{
 var entityActionPriority = map[string]map[string]int{
 	"resource":    resourceActionPriority,
 	"template":    {"enable": 10, "disable": 20, "delete": 30},
+	"source_code": {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
 	"integration": {"enable": 10, "disable": 20, "delete": 30},
 	"storage":     {},
+}
+
+var entityActionKindLabel = map[string]string{
+	"resource":    "resource",
+	"template":    "template",
+	"source_code": "source code",
+	"integration": "integration",
+	"storage":     "storage",
 }
 
 func titleCase(value string) string {
 	if value == "" {
 		return ""
 	}
+	value = strings.ReplaceAll(value, "_", " ")
+	value = strings.TrimSpace(value)
 	runes := []rune(value)
 	first := runes[0]
 	if first >= 'a' && first <= 'z' {
@@ -96,6 +113,8 @@ func (a *App) entityActionPromptForRow(row tabledata.Row, verb string) (*entityA
 	switch value := row.Raw.(type) {
 	case client.Template:
 		return a.templateActionPrompt(value, verb)
+	case client.SourceCode:
+		return a.sourceCodeActionPrompt(value, verb)
 	case client.Integration:
 		return a.integrationActionPrompt(value, verb)
 	case client.Resource:
@@ -126,6 +145,12 @@ func (a *App) openEntityActionMenu(row tabledata.Row) {
 			return []string{"enable", "disable", "delete"}, nil
 		}, func(action string) (*entityActionPrompt, bool) {
 			return a.templateActionPrompt(value, action)
+		})
+	case client.SourceCode:
+		a.openTypedEntityActionMenu("source_code", value.ID, valueOr(value.DisplayName(), value.ID), func(context.Context, string) ([]string, error) {
+			return []string{"enable", "disable", "sync", "delete"}, nil
+		}, func(action string) (*entityActionPrompt, bool) {
+			return a.sourceCodeActionPrompt(value, action)
 		})
 	case client.Integration:
 		a.openTypedEntityActionMenu("integration", value.ID, value.Name, func(context.Context, string) ([]string, error) {
@@ -286,6 +311,23 @@ func (a *App) templateActionPrompt(value client.Template, verb string) (*entityA
 	return &entityActionPrompt{Verb: verb, Kind: "template", ID: value.ID, Name: value.Name, Action: action}, true
 }
 
+func (a *App) sourceCodeActionPrompt(value client.SourceCode, verb string) (*entityActionPrompt, bool) {
+	var action func(context.Context) (string, error)
+	switch verb {
+	case "enable":
+		action = func(ctx context.Context) (string, error) { return "updated", a.client.EnableSourceCode(ctx, value.ID) }
+	case "disable":
+		action = func(ctx context.Context) (string, error) { return "updated", a.client.DisableSourceCode(ctx, value.ID) }
+	case "sync":
+		action = func(ctx context.Context) (string, error) { return "synced", a.client.SyncSourceCode(ctx, value.ID) }
+	case "delete":
+		action = func(ctx context.Context) (string, error) { return "deleted", a.client.DeleteSourceCode(ctx, value.ID) }
+	default:
+		return nil, false
+	}
+	return &entityActionPrompt{Verb: verb, Kind: "source_code", ID: value.ID, Name: valueOr(value.DisplayName(), value.ID), Action: action}, true
+}
+
 func (a *App) integrationActionPrompt(value client.Integration, verb string) (*entityActionPrompt, bool) {
 	var action func(context.Context) (string, error)
 	switch verb {
@@ -310,7 +352,8 @@ func (a *App) confirmPendingEntityAction() {
 	}
 	a.pendingEntityAction = nil
 	title := fmt.Sprintf("%s %s", actionLabel(prompt.Verb), titleCase(prompt.Kind))
-	a.ui.OpenOverlay(title, fmt.Sprintf("Sending %s request for %s %s (%s)...", prompt.Verb, prompt.Kind, valueOr(prompt.Name, prompt.ID), prompt.ID))
+	kindLabel := entityActionKindTitle(prompt.Kind)
+	a.ui.OpenOverlay(title, fmt.Sprintf("Sending %s request for %s %s (%s)...", prompt.Verb, kindLabel, valueOr(prompt.Name, prompt.ID), prompt.ID))
 
 	go func(prompt *entityActionPrompt) {
 		done := a.ui.BeginLoading()
@@ -325,21 +368,28 @@ func (a *App) confirmPendingEntityAction() {
 		}
 		a.ui.Application().QueueUpdateDraw(func() {
 			if err != nil {
-				a.ui.OpenOverlayPrimitive(title, errorView(fmt.Sprintf("Failed to %s %s %s (%s).\n\n%v", prompt.Verb, prompt.Kind, valueOr(prompt.Name, prompt.ID), prompt.ID, err)))
+				a.ui.OpenOverlayPrimitive(title, errorView(fmt.Sprintf("Failed to %s %s %s (%s).\n\n%v", prompt.Verb, kindLabel, valueOr(prompt.Name, prompt.ID), prompt.ID, err)))
 				return
 			}
-			a.ui.OpenOverlayPrimitive(title, errorView(fmt.Sprintf("%s request sent for %s %s (%s).\n\nRefreshing list...\n\nPress Esc or q to close", actionLabel(resultVerb), prompt.Kind, valueOr(prompt.Name, prompt.ID), prompt.ID)))
+			a.ui.OpenOverlayPrimitive(title, errorView(fmt.Sprintf("%s request sent for %s %s (%s).\n\nRefreshing list...\n\nPress Esc or q to close", actionLabel(resultVerb), kindLabel, valueOr(prompt.Name, prompt.ID), prompt.ID)))
 			a.requestRefresh()
 		})
 	}(prompt)
 }
 
 func entityActionPromptView(prompt *entityActionPrompt) tview.Primitive {
-	message := fmt.Sprintf("%s %s %s (%s)?\n\nEnter/y confirm\nEsc/q cancel", actionLabel(prompt.Verb), prompt.Kind, valueOr(prompt.Name, prompt.ID), prompt.ID)
+	message := fmt.Sprintf("%s %s %s (%s)?\n\nEnter/y confirm\nEsc/q cancel", actionLabel(prompt.Verb), entityActionKindTitle(prompt.Kind), valueOr(prompt.Name, prompt.ID), prompt.ID)
 	view := tview.NewTextView()
 	view.SetDynamicColors(true)
 	view.SetScrollable(true)
 	view.SetWrap(true)
 	view.SetText(message)
 	return view
+}
+
+func entityActionKindTitle(kind string) string {
+	if label, ok := entityActionKindLabel[kind]; ok {
+		return label
+	}
+	return strings.ToLower(titleCase(kind))
 }

@@ -18,6 +18,8 @@ func (a *App) openOverview(row tabledata.Row) {
 	switch value := row.Raw.(type) {
 	case client.Resource:
 		a.openResourceOverview(value)
+	case client.SourceCode:
+		a.openSourceCodeOverview(value.ID, valueOr(value.DisplayName(), value.ID))
 	case client.Template:
 		a.openTemplateOverview(value.ID, value.Name)
 	case client.Integration:
@@ -34,6 +36,8 @@ func (a *App) handleNav(key rune) {
 	switch key {
 	case 'r':
 		next = model.EntityResources
+	case 'c':
+		next = model.EntitySourceCodes
 	case 's':
 		next = model.EntityStorages
 	case 't':
@@ -74,6 +78,7 @@ func (a *App) handleNav(key rune) {
 	a.resourceColumnsTable = nil
 	a.templateColumnsTable = nil
 	a.activeTemplateDetail = nil
+	a.activeSourceCodeDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.pendingEntityAction = nil
@@ -164,10 +169,12 @@ func (a *App) applySelectedEntity() {
 	case 1:
 		key = 'r'
 	case 2:
-		key = 's'
+		key = 'c'
 	case 3:
-		key = 't'
+		key = 's'
 	case 4:
+		key = 't'
+	case 5:
 		key = 'i'
 	default:
 		return
@@ -199,6 +206,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 		key   string
 	}{
 		{kind: model.EntityResources, label: "Resources", key: "r"},
+		{kind: model.EntitySourceCodes, label: "Source Codes", key: "c"},
 		{kind: model.EntityStorages, label: "Storages", key: "s"},
 		{kind: model.EntityTemplates, label: "Templates", key: "t"},
 		{kind: model.EntityIntegrations, label: "Integrations", key: "i"},
@@ -223,12 +231,14 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(table, 0, 1, true)
-	root.AddItem(overviewFooter("Enter apply  r/s/t/i quick switch  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("Enter apply  r/c/s/t/i quick switch  Esc/q close"), 1, 0, false)
 	return root, table
 }
 
 func entityTitle(kind model.EntityKind) string {
 	switch kind {
+	case model.EntitySourceCodes:
+		return "Source Codes"
 	case model.EntityStorages:
 		return "Storages"
 	case model.EntityTemplates:
@@ -267,6 +277,8 @@ func (a *App) currentEntityTitle() string {
 
 func entityEmptyLabel(kind model.EntityKind) string {
 	switch kind {
+	case model.EntitySourceCodes:
+		return "No source codes"
 	case model.EntityStorages:
 		return "No storages"
 	case model.EntityTemplates:

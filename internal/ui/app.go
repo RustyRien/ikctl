@@ -85,6 +85,7 @@ const (
 	detailHotkeysAuditDetail
 	detailHotkeysResourceOverview
 	detailHotkeysTemplateOverview
+	detailHotkeysSourceCodeOverview
 	detailHotkeysIntegrationOverview
 	detailHotkeysStorageOverview
 )
@@ -441,6 +442,12 @@ func (a *App) SetTemplateOverviewHotkeys() {
 	a.filterMenuMode = false
 	a.header.SetTemplateOverviewHotkeys()
 	a.updateDetailHotkeys(detailHotkeysTemplateOverview)
+}
+
+func (a *App) SetSourceCodeOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetSourceCodeOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysSourceCodeOverview)
 }
 
 func (a *App) SetIntegrationOverviewHotkeys() {
@@ -1034,6 +1041,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetResourceOverviewHotkeys()
 	case detailHotkeysTemplateOverview:
 		a.header.SetTemplateOverviewHotkeys()
+	case detailHotkeysSourceCodeOverview:
+		a.header.SetSourceCodeOverviewHotkeys()
 	case detailHotkeysIntegrationOverview:
 		a.header.SetIntegrationOverviewHotkeys()
 	case detailHotkeysStorageOverview:

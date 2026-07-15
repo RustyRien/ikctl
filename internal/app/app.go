@@ -135,6 +135,7 @@ type App struct {
 	resourceIntegrationFilter *client.Integration
 	hideDestroyedResources    bool
 	activeTemplateDetail      *templateDetailSelection
+	activeSourceCodeDetail    *entityDetailSelection
 	activeIntegrationDetail   *entityDetailSelection
 	activeStorageDetail       *entityDetailSelection
 	pendingEntityAction       *entityActionPrompt
@@ -345,6 +346,10 @@ func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string
 	case client.Template:
 		return fmt.Sprintf("YAML: Template %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.Template(ctx, id)
+		}, true
+	case client.SourceCode:
+		return fmt.Sprintf("YAML: Source Code %s", valueOr(value.DisplayName(), value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.SourceCode(ctx, id)
 		}, true
 	case client.Integration:
 		return fmt.Sprintf("YAML: Integration %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
@@ -735,7 +740,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.entitySelectorTable = nil
 				return false
-			case 'r', 's', 't', 'i':
+			case 'r', 'c', 's', 't', 'i':
 				a.entitySelectorTable = nil
 				a.ui.CloseOverlay()
 				a.handleNav(event.Rune())
@@ -1535,6 +1540,8 @@ func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, 
 		return value.ID, value.Name, "resource", true
 	case client.Template:
 		return value.ID, value.Name, "template", true
+	case client.SourceCode:
+		return value.ID, valueOr(value.DisplayName(), value.ID), "source_code", true
 	case client.Integration:
 		return value.ID, value.Name, "integration", true
 	case client.Storage:

@@ -102,6 +102,51 @@ func (s Storage) GetName() string {
 	return s.Name
 }
 
+type RefFolders struct {
+	Ref     string   `json:"ref"`
+	Folders []string `json:"folders"`
+}
+
+type SourceCode struct {
+	ID                 string            `json:"id"`
+	Identifier         string            `json:"identifier"`
+	Description        string            `json:"description"`
+	SourceCodeURL      string            `json:"sourceCodeUrl"`
+	SourceCodeProvider string            `json:"sourceCodeProvider"`
+	SourceCodeLanguage string            `json:"sourceCodeLanguage"`
+	IntegrationID      string            `json:"integrationId"`
+	GitTags            []string          `json:"gitTags"`
+	GitTagMessages     map[string]string `json:"gitTagMessages"`
+	GitBranches        []string          `json:"gitBranches"`
+	GitBranchMessages  map[string]string `json:"gitBranchMessages"`
+	GitFoldersMap      []RefFolders      `json:"gitFoldersMap"`
+	Labels             []string          `json:"labels"`
+	Status             string            `json:"status"`
+	RevisionNumber     int               `json:"revisionNumber"`
+	CreatedAt          time.Time         `json:"createdAt"`
+	UpdatedAt          time.Time         `json:"updatedAt"`
+	EntityName         string            `json:"entityName"`
+	Integration        *Integration      `json:"integration"`
+	Creator            *Creator          `json:"creator"`
+}
+
+func (s SourceCode) DisplayName() string {
+	if name := repoNameFromURL(s.SourceCodeURL); name != "" {
+		return name
+	}
+	if strings.TrimSpace(s.Identifier) != "" {
+		return s.Identifier
+	}
+	return s.SourceCodeURL
+}
+
+func (s SourceCode) GetName() string {
+	if strings.TrimSpace(s.Identifier) != "" {
+		return s.Identifier
+	}
+	return s.DisplayName()
+}
+
 type Secret struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -257,6 +302,15 @@ type storageQueryData struct {
 	Storage *Storage `json:"storage"`
 }
 
+type sourceCodesQueryData struct {
+	SourceCodes      []SourceCode `json:"sourceCodes"`
+	SourceCodesCount int          `json:"sourceCodesCount"`
+}
+
+type sourceCodeQueryData struct {
+	SourceCode *SourceCode `json:"sourceCode"`
+}
+
 type integrationActionMutationData struct {
 	IntegrationAction *entityActionResult `json:"integrationAction"`
 }
@@ -275,6 +329,10 @@ type logoutMutationData struct {
 
 type deleteIntegrationMutationData struct {
 	DeleteIntegration bool `json:"deleteIntegration"`
+}
+
+type deleteSourceCodeMutationData struct {
+	DeleteSourceCode bool `json:"deleteSourceCode"`
 }
 
 type deleteTemplateMutationData struct {
@@ -303,6 +361,14 @@ type updateIntegrationMutationData struct {
 
 type updateStorageMutationData struct {
 	UpdateStorage *entityActionResult `json:"updateStorage"`
+}
+
+type updateSourceCodeMutationData struct {
+	UpdateSourceCode *entityActionResult `json:"updateSourceCode"`
+}
+
+type sourceCodeActionMutationData struct {
+	SourceCodeAction *entityActionResult `json:"sourceCodeAction"`
 }
 
 type logsQueryData struct {
@@ -412,4 +478,29 @@ type IntegrationsResult struct {
 type StoragesResult struct {
 	Items []Storage
 	Total int
+}
+
+type SourceCodesResult struct {
+	Items []SourceCode
+	Total int
+}
+
+func repoNameFromURL(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	for _, sep := range []string{"#", "?"} {
+		if index := strings.Index(value, sep); index >= 0 {
+			value = value[:index]
+		}
+	}
+	value = strings.TrimSuffix(strings.TrimRight(value, "/"), ".git")
+	if index := strings.LastIndex(value, "/"); index >= 0 && index+1 < len(value) {
+		return value[index+1:]
+	}
+	if index := strings.LastIndex(value, ":"); index >= 0 && index+1 < len(value) {
+		return value[index+1:]
+	}
+	return value
 }

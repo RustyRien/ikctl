@@ -86,6 +86,16 @@ var templateOverviewHints = headerHints{
 	},
 }
 
+var sourceCodeOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "A", label: "actions"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
+		{{key: "r", label: "resources"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
 var integrationOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
@@ -192,6 +202,10 @@ func (h *Header) SetResourceOverviewHotkeys() {
 
 func (h *Header) SetTemplateOverviewHotkeys() {
 	h.SetHotkeys(templateOverviewHints)
+}
+
+func (h *Header) SetSourceCodeOverviewHotkeys() {
+	h.SetHotkeys(sourceCodeOverviewHints)
 }
 
 func (h *Header) SetIntegrationOverviewHotkeys() {

@@ -16,6 +16,7 @@ func (a *App) openStorageOverview(id string, name string) {
 	title := fmt.Sprintf("Storage: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeSourceCodeDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = &entityDetailSelection{ID: id, Name: name, Kind: "storages"}
 	a.auditLogRows = nil

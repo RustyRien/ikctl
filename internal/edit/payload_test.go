@@ -101,6 +101,25 @@ configuration:
 	}
 }
 
+func TestSourceCodeInputFromYAML(t *testing.T) {
+	input, err := SourceCodeInputFromYAML([]byte(`description: Main infrastructure repo
+integration:
+  id: i1
+labels:
+  - platform
+source_code_url: https://github.com/acme/infrastructure.git
+`))
+	if err != nil {
+		t.Fatalf("SourceCodeInputFromYAML: %v", err)
+	}
+	if input["description"] != "Main infrastructure repo" || input["integrationId"] != "i1" {
+		t.Fatalf("unexpected values: %#v", input)
+	}
+	if _, ok := input["sourceCodeUrl"]; ok {
+		t.Fatalf("did not expect sourceCodeUrl in input: %#v", input)
+	}
+}
+
 func TestResourceYAMLIncludesOnlyEditableFields(t *testing.T) {
 	data, err := ResourceYAML(client.Resource{
 		ID:          "r1",
@@ -247,6 +266,39 @@ func TestStorageYAMLIncludesOnlyEditableFields(t *testing.T) {
 		}
 	}
 	for _, unwanted := range []string{"\nname:", "\nconfiguration:", "\nstate:", "\nstatus:", "\nstorage_type:", "\ncreated_at:", "\nupdated_at:", "\nid:"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("did not expect YAML to contain %q, got:\n%s", unwanted, text)
+		}
+	}
+}
+
+func TestSourceCodeYAMLIncludesOnlyEditableFields(t *testing.T) {
+	data, err := SourceCodeYAML(client.SourceCode{
+		ID:                 "sc1",
+		Identifier:         "github.com/acme/infrastructure",
+		Description:        "Main infrastructure repo",
+		SourceCodeURL:      "https://github.com/acme/infrastructure.git",
+		SourceCodeProvider: "github",
+		SourceCodeLanguage: "opentofu",
+		IntegrationID:      "i1",
+		Labels:             []string{"platform"},
+		Status:             "ready",
+	})
+	if err != nil {
+		t.Fatalf("SourceCodeYAML: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"description: Main infrastructure repo",
+		"integration_id: i1",
+		"labels:",
+		"- platform",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected YAML to contain %q, got:\n%s", want, text)
+		}
+	}
+	for _, unwanted := range []string{"\nidentifier:", "\nsource_code_url:", "\nsource_code_provider:", "\nsource_code_language:", "\nstatus:", "\nid:"} {
 		if strings.Contains(text, unwanted) {
 			t.Fatalf("did not expect YAML to contain %q, got:\n%s", unwanted, text)
 		}

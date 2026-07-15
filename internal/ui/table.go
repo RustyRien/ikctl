@@ -206,7 +206,7 @@ func (t *Table) EntityMode() bool {
 }
 
 func (t *Table) EntityHints() string {
-	return "r:Resources  s:Storages  t:Templates  i:Integrations"
+	return "r:Resources  c:SourceCodes  s:Storages  t:Templates  i:Integrations"
 }
 
 func (t *Table) EntityForKey(key rune) (rune, bool) {
@@ -214,7 +214,7 @@ func (t *Table) EntityForKey(key rune) (rune, bool) {
 		return 0, false
 	}
 	switch unicode.ToLower(key) {
-	case 'r', 's', 't', 'i':
+	case 'r', 'c', 's', 't', 'i':
 		return unicode.ToLower(key), true
 	default:
 		return 0, false

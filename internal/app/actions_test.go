@@ -36,6 +36,14 @@ func TestEntityActionPromptForRowSupportsEntities(t *testing.T) {
 	if resourcePrompt.Kind != "resource" || resourcePrompt.Verb != "disable" || resourcePrompt.ID != "r1" {
 		t.Fatalf("unexpected resource action prompt: %#v", resourcePrompt)
 	}
+
+	sourceCodePrompt, ok := a.entityActionPromptForRow(tabledata.Row{Raw: client.SourceCode{ID: "sc1", Identifier: "github.com/acme/repo"}}, "sync")
+	if !ok || sourceCodePrompt == nil {
+		t.Fatal("expected source code sync prompt")
+	}
+	if sourceCodePrompt.Kind != "source_code" || sourceCodePrompt.Verb != "sync" || sourceCodePrompt.ID != "sc1" {
+		t.Fatalf("unexpected source code action prompt: %#v", sourceCodePrompt)
+	}
 }
 
 func TestTitleCase(t *testing.T) {
@@ -55,6 +63,9 @@ func TestActionPromptFactoriesReturnAction(t *testing.T) {
 	}{
 		{name: "template disable", mk: func() (*entityActionPrompt, bool) {
 			return a.templateActionPrompt(client.Template{ID: "t1", Name: "tpl"}, "disable")
+		}},
+		{name: "source code sync", mk: func() (*entityActionPrompt, bool) {
+			return a.sourceCodeActionPrompt(client.SourceCode{ID: "sc1", Identifier: "github.com/acme/repo"}, "sync")
 		}},
 		{name: "integration enable", mk: func() (*entityActionPrompt, bool) {
 			return a.integrationActionPrompt(client.Integration{ID: "i1", Name: "aws"}, "enable")
@@ -101,6 +112,7 @@ func TestEntityMenuActionsFiltersEditForTemplatesAndIntegrations(t *testing.T) {
 	}{
 		{name: "template", kind: "template", in: []string{"enable", "edit", "delete"}, want: []string{"enable", "delete"}},
 		{name: "integration", kind: "integration", in: []string{"disable", "edit", "delete"}, want: []string{"disable", "delete"}},
+		{name: "source_code", kind: "source_code", in: []string{"delete", "sync", "edit", "enable"}, want: []string{"enable", "sync", "delete"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := entityMenuActions(tc.kind, tc.in)

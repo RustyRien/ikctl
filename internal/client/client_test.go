@@ -534,3 +534,67 @@ func TestStorages(t *testing.T) {
 		t.Fatalf("update storage: %v", err)
 	}
 }
+
+func TestSourceCodes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "ListSourceCodes"):
+			fmt.Fprint(w, `{"data":{"sourceCodes":[{"id":"sc1","identifier":"github.com/acme/infrastructure","description":"Main repo","sourceCodeUrl":"https://github.com/acme/infrastructure.git","sourceCodeProvider":"github","sourceCodeLanguage":"opentofu","labels":["platform"],"status":"ready","revisionNumber":2,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"source_code","integration":{"id":"i1","name":"git-creds","entityName":"integration","integrationProvider":"github","integrationType":"git"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}],"sourceCodesCount":1}}`)
+		case strings.Contains(req.Query, "GetSourceCode"):
+			fmt.Fprint(w, `{"data":{"sourceCode":{"id":"sc1","identifier":"github.com/acme/infrastructure","description":"Main repo","sourceCodeUrl":"https://github.com/acme/infrastructure.git","sourceCodeProvider":"github","sourceCodeLanguage":"opentofu","integrationId":"i1","gitTags":["v1.0.0"],"gitTagMessages":{"v1.0.0":"Initial"},"gitBranches":["main"],"gitBranchMessages":{"main":"Default"},"gitFoldersMap":[{"ref":"main","folders":["modules/network"]}],"labels":["platform"],"status":"ready","revisionNumber":2,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"source_code","integration":{"id":"i1","name":"git-creds","entityName":"integration","integrationProvider":"github","integrationType":"git"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}}}`)
+		case strings.Contains(req.Query, "SourceCodeAction"):
+			fmt.Fprint(w, `{"data":{"sourceCodeAction":{"id":"sc1","entityName":"source_code","status":"ready"}}}`)
+		case strings.Contains(req.Query, "DeleteSourceCode"):
+			fmt.Fprint(w, `{"data":{"deleteSourceCode":true}}`)
+		case strings.Contains(req.Query, "UpdateSourceCode"):
+			if req.Variables["id"] != "sc1" {
+				t.Fatalf("update source code id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateSourceCode":{"id":"sc1","identifier":"github.com/acme/infrastructure","entityName":"source_code"}}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	sourceCodes, err := client.SourceCodes(context.Background(), map[string]any{"source_code_provider": "github"}, []string{"updated_at", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("source codes query: %v", err)
+	}
+	if sourceCodes.Total != 1 || len(sourceCodes.Items) != 1 || sourceCodes.Items[0].DisplayName() != "infrastructure" {
+		t.Fatalf("source codes = %#v", sourceCodes)
+	}
+
+	sourceCode, err := client.SourceCode(context.Background(), "sc1")
+	if err != nil {
+		t.Fatalf("source code query: %v", err)
+	}
+	if sourceCode == nil || sourceCode.SourceCodeProvider != "github" || sourceCode.Integration == nil || sourceCode.Integration.Name != "git-creds" {
+		t.Fatalf("source code = %#v", sourceCode)
+	}
+
+	if err := client.EnableSourceCode(context.Background(), "sc1"); err != nil {
+		t.Fatalf("enable source code: %v", err)
+	}
+	if err := client.DisableSourceCode(context.Background(), "sc1"); err != nil {
+		t.Fatalf("disable source code: %v", err)
+	}
+	if err := client.SyncSourceCode(context.Background(), "sc1"); err != nil {
+		t.Fatalf("sync source code: %v", err)
+	}
+	if err := client.DeleteSourceCode(context.Background(), "sc1"); err != nil {
+		t.Fatalf("delete source code: %v", err)
+	}
+	if err := client.UpdateSourceCode(context.Background(), "sc1", map[string]any{"description": "Updated"}); err != nil {
+		t.Fatalf("update source code: %v", err)
+	}
+}

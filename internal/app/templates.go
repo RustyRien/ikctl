@@ -49,6 +49,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 	title := fmt.Sprintf("Template: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = &templateDetailSelection{ID: id, Name: name}
+	a.activeSourceCodeDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.auditLogRows = nil
