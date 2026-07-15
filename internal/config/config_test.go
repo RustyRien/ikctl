@@ -132,6 +132,7 @@ func TestSavePersistsTUIViewPreferences(t *testing.T) {
 		View: ViewConfig{
 			Resources: ResourceViewConfig{
 				Columns:           []string{"name", "status", "age"},
+				StorageFilter:     FilterRef{ID: "st-1", Name: "terraform-state"},
 				TemplateFilter:    FilterRef{ID: "tpl-1", Name: "base-template"},
 				IntegrationFilter: FilterRef{ID: "int-1", Name: "aws"},
 				HideDestroyed:     true,
@@ -152,6 +153,9 @@ func TestSavePersistsTUIViewPreferences(t *testing.T) {
 	}
 	if got := reloaded.View.Resources.Columns; len(got) != 3 || got[0] != "name" || got[1] != "status" || got[2] != "age" {
 		t.Fatalf("unexpected resource columns: %#v", got)
+	}
+	if reloaded.View.Resources.StorageFilter.ID != "st-1" || reloaded.View.Resources.StorageFilter.Name != "terraform-state" {
+		t.Fatalf("unexpected storage filter: %#v", reloaded.View.Resources.StorageFilter)
 	}
 	if reloaded.View.Resources.TemplateFilter.ID != "tpl-1" || reloaded.View.Resources.TemplateFilter.Name != "base-template" {
 		t.Fatalf("unexpected template filter: %#v", reloaded.View.Resources.TemplateFilter)

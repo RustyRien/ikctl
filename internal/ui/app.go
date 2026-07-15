@@ -48,6 +48,7 @@ type App struct {
 	navFn               func(rune)
 	sortFn              func(int, bool)
 	loadMoreFn          func()
+	storageFilterFn     func()
 	templateFilterFn    func()
 	integrationFilterFn func()
 	resourceColumnsFn   func()
@@ -85,6 +86,7 @@ const (
 	detailHotkeysResourceOverview
 	detailHotkeysTemplateOverview
 	detailHotkeysIntegrationOverview
+	detailHotkeysStorageOverview
 )
 
 var loadingFrames = []string{"|", "/", "-", "\\"}
@@ -277,6 +279,10 @@ func (a *App) SetLoadMoreFunc(fn func()) {
 	a.loadMoreFn = fn
 }
 
+func (a *App) SetStorageFilterFunc(fn func()) {
+	a.storageFilterFn = fn
+}
+
 func (a *App) SetTemplateFilterFunc(fn func()) {
 	a.templateFilterFn = fn
 }
@@ -443,6 +449,12 @@ func (a *App) SetIntegrationOverviewHotkeys() {
 	a.updateDetailHotkeys(detailHotkeysIntegrationOverview)
 }
 
+func (a *App) SetStorageOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetStorageOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysStorageOverview)
+}
+
 func (a *App) CloseDetail() {
 	if a.detailClosedFn != nil {
 		a.detailClosedFn()
@@ -563,6 +575,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 			return nil
 		case tcell.KeyRune:
 			switch event.Rune() {
+			case 's':
+				a.exitFilterMenuMode()
+				if a.storageFilterFn != nil {
+					a.storageFilterFn()
+				}
+				return nil
 			case 'i':
 				a.exitFilterMenuMode()
 				if a.integrationFilterFn != nil {
@@ -889,7 +907,7 @@ func (a *App) renderStatus() {
 		return
 	}
 	if a.filterMenuMode {
-		a.status.SetText(a.withLoadingSuffix("Choose filter: i integration, t template, d hide destroyed, c reset all  Esc back"))
+		a.status.SetText(a.withLoadingSuffix("Choose filter: s storage, i integration, t template, d hide destroyed, c reset all  Esc back"))
 		return
 	}
 	if a.table.SortMode() {
@@ -1018,6 +1036,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetTemplateOverviewHotkeys()
 	case detailHotkeysIntegrationOverview:
 		a.header.SetIntegrationOverviewHotkeys()
+	case detailHotkeysStorageOverview:
+		a.header.SetStorageOverviewHotkeys()
 	default:
 		a.header.ResetHotkeys()
 	}

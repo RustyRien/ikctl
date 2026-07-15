@@ -25,6 +25,7 @@ type getOptions struct {
 	label     string
 	provider  string
 	typeName  string
+	name      string
 	filters   []string
 }
 
@@ -47,6 +48,7 @@ func getCmd() *cobra.Command {
 	cmd.Flags().StringVar(&options.label, "label", "", "Filter resources by label")
 	cmd.Flags().StringVar(&options.provider, "provider", "", "Filter integrations by provider")
 	cmd.Flags().StringVar(&options.typeName, "type", "", "Filter integrations by type")
+	cmd.Flags().StringVar(&options.name, "name", "", "Filter entities by name")
 	cmd.Flags().StringArrayVar(&options.filters, "filter", nil, "Additional filter as key=value")
 	return cmd
 }
@@ -148,6 +150,9 @@ func buildFilters(descriptor *resource.Descriptor, options getOptions) (map[stri
 	}
 	if options.typeName != "" {
 		filters["type"] = options.typeName
+	}
+	if options.name != "" {
+		filters["name"] = options.name
 	}
 	for _, item := range options.filters {
 		key, value, ok := strings.Cut(item, "=")

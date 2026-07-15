@@ -20,6 +20,7 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 		View: config.ViewConfig{
 			Resources: config.ResourceViewConfig{
 				Columns:           []string{"name", "status", "age"},
+				StorageFilter:     config.FilterRef{ID: "st-1", Name: "terraform-state"},
 				TemplateFilter:    config.FilterRef{ID: "tpl-1", Name: "base-template"},
 				IntegrationFilter: config.FilterRef{ID: "int-1", Name: "aws"},
 				HideDestroyed:     true,
@@ -41,6 +42,9 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 	if !a.visibleTemplateColumns["name"] || !a.visibleTemplateColumns["updatedAt"] || !a.visibleTemplateColumns["age"] {
 		t.Fatalf("template columns not applied: %#v", a.visibleTemplateColumns)
 	}
+	if a.resourceStorageFilter == nil || a.resourceStorageFilter.ID != "st-1" {
+		t.Fatalf("storage filter not applied: %#v", a.resourceStorageFilter)
+	}
 	if a.resourceTemplateFilter == nil || a.resourceTemplateFilter.ID != "tpl-1" {
 		t.Fatalf("template filter not applied: %#v", a.resourceTemplateFilter)
 	}
@@ -52,6 +56,9 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 	}
 
 	resourceFilter := a.models[model.EntityResources].Filter()
+	if resourceFilter["storage_id"] != "st-1" {
+		t.Fatalf("resource model storage filter = %#v", resourceFilter)
+	}
 	if resourceFilter["template_id"] != "tpl-1" {
 		t.Fatalf("resource model template filter = %#v", resourceFilter)
 	}

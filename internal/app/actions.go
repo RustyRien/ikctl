@@ -56,12 +56,14 @@ var entityActionDescriptions = map[string]map[string]string{
 		"disable": "Disable the integration.",
 		"delete":  "Delete the integration record.",
 	},
+	"storage": {},
 }
 
 var entityActionPriority = map[string]map[string]int{
 	"resource":    resourceActionPriority,
 	"template":    {"enable": 10, "disable": 20, "delete": 30},
 	"integration": {"enable": 10, "disable": 20, "delete": 30},
+	"storage":     {},
 }
 
 func titleCase(value string) string {
@@ -131,6 +133,8 @@ func (a *App) openEntityActionMenu(row tabledata.Row) {
 		}, func(action string) (*entityActionPrompt, bool) {
 			return a.integrationActionPrompt(value, action)
 		})
+	case client.Storage:
+		a.ui.OpenOverlayPrimitive("Actions", errorView("Actions are not supported for storages"))
 	default:
 		a.ui.OpenOverlayPrimitive("Actions", errorView("Actions are not supported for the selected item"))
 	}

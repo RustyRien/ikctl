@@ -79,8 +79,27 @@ type Workspace struct {
 }
 
 type Storage struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	StorageType     string         `json:"storageType"`
+	StorageProvider string         `json:"storageProvider"`
+	Configuration   map[string]any `json:"configuration"`
+	Description     string         `json:"description"`
+	Labels          []string       `json:"labels"`
+	State           string         `json:"state"`
+	Status          string         `json:"status"`
+	ResourcesCount  int            `json:"resourcesCount"`
+	ExecutorsCount  int            `json:"executorsCount"`
+	RevisionNumber  int            `json:"revisionNumber"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+	EntityName      string         `json:"entityName"`
+	Integration     *Integration   `json:"integration"`
+	Creator         *Creator       `json:"creator"`
+}
+
+func (s Storage) GetName() string {
+	return s.Name
 }
 
 type Secret struct {
@@ -229,6 +248,15 @@ type integrationQueryData struct {
 	Integration *Integration `json:"integration"`
 }
 
+type storagesQueryData struct {
+	Storages      []Storage `json:"storages"`
+	StoragesCount int       `json:"storagesCount"`
+}
+
+type storageQueryData struct {
+	Storage *Storage `json:"storage"`
+}
+
 type integrationActionMutationData struct {
 	IntegrationAction *entityActionResult `json:"integrationAction"`
 }
@@ -271,6 +299,10 @@ type updateTemplateMutationData struct {
 
 type updateIntegrationMutationData struct {
 	UpdateIntegration *integrationUpdateResult `json:"updateIntegration"`
+}
+
+type updateStorageMutationData struct {
+	UpdateStorage *entityActionResult `json:"updateStorage"`
 }
 
 type logsQueryData struct {
@@ -374,5 +406,10 @@ type TemplatesResult struct {
 
 type IntegrationsResult struct {
 	Items []Integration
+	Total int
+}
+
+type StoragesResult struct {
+	Items []Storage
 	Total int
 }

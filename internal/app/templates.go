@@ -50,6 +50,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = &templateDetailSelection{ID: id, Name: name}
 	a.activeIntegrationDetail = nil
+	a.activeStorageDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading template overview...")

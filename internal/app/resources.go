@@ -68,10 +68,51 @@ func (a *App) resetAllResourceFilters() {
 	if a.activeKind != model.EntityResources {
 		return
 	}
+	a.resourceStorageFilter = nil
 	a.resourceTemplateFilter = nil
 	a.resourceIntegrationFilter = nil
 	a.hideDestroyedResources = false
 	a.applyResourceFilters()
+}
+
+func (a *App) openStorageFilter() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+
+	selectedStorageID := ""
+	if a.resourceStorageFilter != nil {
+		selectedStorageID = a.resourceStorageFilter.ID
+	}
+	a.resetResourceFilterOverlays()
+
+	a.ui.OpenOverlay("Resource Storage Filter", "Loading storages...")
+
+	go func(selectedID string) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		result, err := a.client.Storages(ctx, nil, []string{"name", "ASC"}, []int{0, 200})
+		var primitive tview.Primitive
+		var storages []client.Storage
+		var table *tview.Table
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load storages.\n\n%v", err))
+		} else {
+			storages = result.Items
+			primitive, table = storageFilterView(result.Items, len(result.Items), result.Total, selectedID, "", false)
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.storageFilterAllRows = storages
+			a.storageFilterRows = storages
+			a.storageFilterTable = table
+			a.ui.OpenOverlayPrimitive("Resource Storage Filter", primitive)
+		})
+	}(selectedStorageID)
 }
 
 func (a *App) openTemplateFilter() {
@@ -167,6 +208,19 @@ func (a *App) renderTemplateFilterOverlay() {
 	a.ui.OpenOverlayPrimitive("Resource Template Filter", primitive)
 }
 
+func (a *App) renderStorageFilterOverlay() {
+	selectedID := ""
+	if a.resourceStorageFilter != nil {
+		selectedID = a.resourceStorageFilter.ID
+	}
+
+	filtered := filterStorages(a.storageFilterAllRows, a.storageFilterQuery)
+	primitive, table := storageFilterView(filtered, len(filtered), len(a.storageFilterAllRows), selectedID, a.storageFilterQuery, a.storageFilterMode)
+	a.storageFilterRows = filtered
+	a.storageFilterTable = table
+	a.ui.OpenOverlayPrimitive("Resource Storage Filter", primitive)
+}
+
 func (a *App) renderIntegrationFilterOverlay() {
 	selectedID := ""
 	if a.resourceIntegrationFilter != nil {
@@ -207,6 +261,36 @@ func (a *App) applySelectedTemplateFilter() {
 
 func (a *App) clearTemplateFilter() {
 	a.resourceTemplateFilter = nil
+	a.applyResourceFilters()
+}
+
+func (a *App) applySelectedStorageFilter() {
+	if a.storageFilterTable == nil {
+		return
+	}
+
+	selectedRow, _ := a.storageFilterTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+
+	if selectedRow == 1 {
+		a.clearStorageFilter()
+		return
+	}
+
+	index := selectedRow - 2
+	if index < 0 || index >= len(a.storageFilterRows) {
+		return
+	}
+
+	storage := a.storageFilterRows[index]
+	a.resourceStorageFilter = &storage
+	a.applyResourceFilters()
+}
+
+func (a *App) clearStorageFilter() {
+	a.resourceStorageFilter = nil
 	a.applyResourceFilters()
 }
 
@@ -262,6 +346,11 @@ func (a *App) applyResourceFilters() {
 }
 
 func (a *App) resetResourceFilterOverlays() {
+	a.storageFilterAllRows = nil
+	a.storageFilterRows = nil
+	a.storageFilterTable = nil
+	a.storageFilterQuery = ""
+	a.storageFilterMode = false
 	a.templateFilterAllRows = nil
 	a.templateFilterRows = nil
 	a.templateFilterTable = nil
@@ -278,6 +367,9 @@ func (a *App) resetResourceFilterOverlays() {
 
 func (a *App) resourceFilters() map[string]any {
 	filter := map[string]any{}
+	if a.resourceStorageFilter != nil {
+		filter["storage_id"] = a.resourceStorageFilter.ID
+	}
 	if a.resourceTemplateFilter != nil {
 		filter["template_id"] = a.resourceTemplateFilter.ID
 	}
@@ -293,6 +385,83 @@ func (a *App) resourceFilters() map[string]any {
 	return filter
 }
 
+func storageFilterView(storages []client.Storage, shown int, total int, selectedID string, query string, filterMode bool) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Storages")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"STORAGE", "PROVIDER", "TYPE", "UPDATED"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	selectedRow := 1
+	allLabel := "All storages"
+	if selectedID == "" {
+		allLabel = allLabel + "  [active]"
+	}
+	table.SetCell(1, 0, tview.NewTableCell(allLabel).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 2, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 3, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+
+	for rowIndex, storage := range storages {
+		name := storage.Name
+		if storage.ID == selectedID {
+			name = name + "  [active]"
+			selectedRow = rowIndex + 2
+		}
+		fields := []string{
+			name,
+			blankDash(storage.StorageProvider),
+			blankDash(storage.StorageType),
+			storage.UpdatedAt.Format(time.RFC3339),
+		}
+		for col, field := range fields {
+			table.SetCell(rowIndex+2, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+
+	table.Select(selectedRow, 0)
+
+	footerText := fmt.Sprintf("Showing %d of %d storages  / filter  Enter apply  c clear  Esc/q close", shown, total)
+	if query != "" {
+		footerText += fmt.Sprintf("  Filter: %s", query)
+	}
+	if filterMode {
+		footerText += "  typing..."
+	}
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter(footerText), 1, 0, false)
+	return root, table
+}
+
+func filterStorages(storages []client.Storage, query string) []client.Storage {
+	if query == "" {
+		return append([]client.Storage(nil), storages...)
+	}
+
+	targets := make([]string, 0, len(storages))
+	for _, storage := range storages {
+		targets = append(targets, strings.ToLower(storage.Name+" "+storage.StorageProvider+" "+storage.StorageType))
+	}
+
+	matches := fuzzy.Find(strings.ToLower(query), targets)
+	filtered := make([]client.Storage, 0, len(matches))
+	for _, match := range matches {
+		filtered = append(filtered, storages[match.Index])
+	}
+	return filtered
+}
+
 func (a *App) openResourceOverview(resource client.Resource) {
 	session := a.nextLiveLogSession()
 
@@ -300,6 +469,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
 	a.activeIntegrationDetail = nil
+	a.activeStorageDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading resource overview...")
@@ -360,6 +530,13 @@ func (a *App) openResourceOverview(resource client.Resource) {
 
 func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]func() {
 	jumpActions := make(map[rune]func())
+	if resource.Storage != nil && resource.Storage.ID != "" {
+		storageID := resource.Storage.ID
+		storageName := resource.Storage.Name
+		jumpActions['s'] = func() {
+			a.openStorageOverview(storageID, valueOr(storageName, storageID))
+		}
+	}
 	if len(resource.Integrations) > 0 {
 		jumpActions['i'] = func() {
 			a.openOverviewJumpSelection(
@@ -935,6 +1112,9 @@ func resourceTemplateHint(resource client.Resource) string {
 	}
 	if resource.Template != nil && resource.Template.ID != "" {
 		hints = append(hints, "t template")
+	}
+	if resource.Storage != nil && resource.Storage.ID != "" {
+		hints = append(hints, "s storage")
 	}
 	hints = append(hints, "T tree")
 	if len(resource.Integrations) > 0 {

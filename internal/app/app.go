@@ -116,6 +116,11 @@ type App struct {
 	templateFilterTable       *tview.Table
 	templateFilterQuery       string
 	templateFilterMode        bool
+	storageFilterAllRows      []client.Storage
+	storageFilterRows         []client.Storage
+	storageFilterTable        *tview.Table
+	storageFilterQuery        string
+	storageFilterMode         bool
 	integrationFilterAllRows  []client.Integration
 	integrationFilterRows     []client.Integration
 	integrationFilterTable    *tview.Table
@@ -125,11 +130,13 @@ type App struct {
 	visibleResourceColumns    map[string]bool
 	templateColumnsTable      *tview.Table
 	visibleTemplateColumns    map[string]bool
+	resourceStorageFilter     *client.Storage
 	resourceTemplateFilter    *client.Template
 	resourceIntegrationFilter *client.Integration
 	hideDestroyedResources    bool
 	activeTemplateDetail      *templateDetailSelection
 	activeIntegrationDetail   *entityDetailSelection
+	activeStorageDetail       *entityDetailSelection
 	pendingEntityAction       *entityActionPrompt
 	resourceReview            *resourceReviewState
 	liveLogMx                 sync.Mutex
@@ -198,6 +205,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetSortFunc(app.handleSort)
 	ui.SetLoadMoreFunc(app.requestLoadMore)
 	ui.SetTemplateFilterFunc(app.openTemplateFilter)
+	ui.SetStorageFilterFunc(app.openStorageFilter)
 	ui.SetIntegrationFilterFunc(app.openIntegrationFilter)
 	ui.SetResourceColumnsFunc(app.openColumns)
 	ui.SetToggleDestroyedFunc(app.toggleHideDestroyedResources)
@@ -341,6 +349,10 @@ func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string
 	case client.Integration:
 		return fmt.Sprintf("YAML: Integration %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.Integration(ctx, id)
+		}, true
+	case client.Storage:
+		return fmt.Sprintf("YAML: Storage %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Storage(ctx, id)
 		}, true
 	default:
 		return "", "", nil, false
@@ -723,7 +735,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.entitySelectorTable = nil
 				return false
-			case 'r', 't', 'i':
+			case 'r', 's', 't', 'i':
 				a.entitySelectorTable = nil
 				a.ui.CloseOverlay()
 				a.handleNav(event.Rune())
@@ -851,6 +863,65 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				a.integrationFilterTable = nil
 				a.integrationFilterQuery = ""
 				a.integrationFilterMode = false
+				a.overviewTree = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.storageFilterTable != nil {
+		if a.storageFilterMode {
+			switch event.Key() {
+			case tcell.KeyEsc:
+				a.storageFilterMode = false
+				a.renderStorageFilterOverlay()
+				return true
+			case tcell.KeyBackspace, tcell.KeyBackspace2:
+				a.storageFilterQuery = trimLastRune(a.storageFilterQuery)
+				a.renderStorageFilterOverlay()
+				return true
+			case tcell.KeyEnter:
+				a.applySelectedStorageFilter()
+				return true
+			case tcell.KeyRune:
+				if event.Rune() != '/' {
+					a.storageFilterQuery += string(event.Rune())
+					a.renderStorageFilterOverlay()
+				}
+				return true
+			}
+		}
+
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedStorageFilter()
+			return true
+		case tcell.KeyEsc:
+			a.storageFilterAllRows = nil
+			a.storageFilterRows = nil
+			a.storageFilterTable = nil
+			a.storageFilterQuery = ""
+			a.storageFilterMode = false
+			a.overviewTree = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '/':
+				a.storageFilterMode = true
+				a.renderStorageFilterOverlay()
+				return true
+			case 'c':
+				a.clearStorageFilter()
+				return true
+			case 'q':
+				a.storageFilterAllRows = nil
+				a.storageFilterRows = nil
+				a.storageFilterTable = nil
+				a.storageFilterQuery = ""
+				a.storageFilterMode = false
 				a.overviewTree = nil
 				return false
 			}
@@ -1466,6 +1537,8 @@ func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, 
 		return value.ID, value.Name, "template", true
 	case client.Integration:
 		return value.ID, value.Name, "integration", true
+	case client.Storage:
+		return value.ID, value.Name, "storage", true
 	default:
 		return "", "", "", false
 	}

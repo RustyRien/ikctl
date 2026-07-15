@@ -12,6 +12,9 @@ func (a *App) applySavedViewPreferences() {
 	if visible := visibleColumnsFromFields(a.config.View.Templates.Columns, templateColumnOptions); len(visible) > 0 {
 		a.visibleTemplateColumns = visible
 	}
+	if ref := a.config.View.Resources.StorageFilter; ref.ID != "" {
+		a.resourceStorageFilter = &client.Storage{ID: ref.ID, Name: ref.Name}
+	}
 	if ref := a.config.View.Resources.TemplateFilter; ref.ID != "" {
 		a.resourceTemplateFilter = &client.Template{ID: ref.ID, Name: ref.Name}
 	}
@@ -24,10 +27,18 @@ func (a *App) applySavedViewPreferences() {
 func (a *App) saveViewPreferences() {
 	a.config.View.Resources.Columns = selectedFields(a.visibleResourceColumns, resourceColumnOptions)
 	a.config.View.Templates.Columns = selectedFields(a.visibleTemplateColumns, templateColumnOptions)
+	a.config.View.Resources.StorageFilter = storageFilterRef(a.resourceStorageFilter)
 	a.config.View.Resources.TemplateFilter = templateFilterRef(a.resourceTemplateFilter)
 	a.config.View.Resources.IntegrationFilter = integrationFilterRef(a.resourceIntegrationFilter)
 	a.config.View.Resources.HideDestroyed = a.hideDestroyedResources
 	_ = a.config.Save()
+}
+
+func storageFilterRef(value *client.Storage) config.FilterRef {
+	if value == nil {
+		return config.FilterRef{}
+	}
+	return config.FilterRef{ID: value.ID, Name: value.Name}
 }
 
 func visibleColumnsFromFields(fields []string, options []resourceColumnOption) map[string]bool {

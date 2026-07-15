@@ -108,6 +108,8 @@ func (a *App) editSessionForRow(row tabledata.Row) (editcore.Session, error) {
 		kind, id, name = "template", value.ID, value.Name
 	case client.Integration:
 		kind, id, name = "integration", value.ID, value.Name
+	case client.Storage:
+		kind, id, name = "storage", value.ID, value.Name
 	default:
 		return session, fmt.Errorf("edit is not supported for %T", row.Raw)
 	}
@@ -127,5 +129,7 @@ func (a *App) reopenEditedDetail(session editcore.Session) {
 		a.openTemplateOverview(session.ID, session.Name)
 	case "integration":
 		a.openIntegrationOverview(session.ID, session.Name)
+	case "storage":
+		a.openStorageOverview(session.ID, session.Name)
 	}
 }

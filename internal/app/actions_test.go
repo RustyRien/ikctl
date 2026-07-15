@@ -134,6 +134,7 @@ func TestYAMLDetailForRowSupportsEntities(t *testing.T) {
 		{name: "resource", row: tabledata.Row{Raw: client.Resource{ID: "r1", Name: "redis"}}, wantTitle: "YAML: Resource redis"},
 		{name: "template", row: tabledata.Row{Raw: client.Template{ID: "t1", Name: "base"}}, wantTitle: "YAML: Template base"},
 		{name: "integration", row: tabledata.Row{Raw: client.Integration{ID: "i1", Name: "aws"}}, wantTitle: "YAML: Integration aws"},
+		{name: "storage", row: tabledata.Row{Raw: client.Storage{ID: "st1", Name: "state"}}, wantTitle: "YAML: Storage state"},
 	}
 
 	a := &App{client: &client.Client{}}
@@ -224,9 +225,18 @@ func TestIntegrationOverviewHintIncludesResourcesAndAudit(t *testing.T) {
 	}
 }
 
+func TestStorageOverviewHintIncludesResourcesAndAudit(t *testing.T) {
+	hint := storageOverviewHint(client.Storage{ID: "st1", Name: "tf-state"})
+	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "E edit"} {
+		if !strings.Contains(hint, want) {
+			t.Fatalf("storage overview hint missing %q in %q", want, hint)
+		}
+	}
+}
+
 func TestResourceTemplateHintIncludesEdit(t *testing.T) {
-	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Template: &client.Template{ID: "t1"}})
-	for _, want := range []string{"y yaml", "E edit", "t template", "T tree"} {
+	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Template: &client.Template{ID: "t1"}, Storage: &client.Storage{ID: "st1", Name: "tf-state"}})
+	for _, want := range []string{"y yaml", "E edit", "t template", "s storage", "T tree"} {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("resource hint missing %q in %q", want, hint)
 		}

@@ -19,6 +19,7 @@ const (
 	EntityResources    EntityKind = "resources"
 	EntityTemplates    EntityKind = "templates"
 	EntityIntegrations EntityKind = "integrations"
+	EntityStorages     EntityKind = "storages"
 )
 
 type EntityModel struct {

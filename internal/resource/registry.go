@@ -5,6 +5,7 @@ import (
 	"github.com/electrolux-oss/ik-tui/internal/resource/core"
 	"github.com/electrolux-oss/ik-tui/internal/resource/integrations"
 	"github.com/electrolux-oss/ik-tui/internal/resource/resources"
+	"github.com/electrolux-oss/ik-tui/internal/resource/storages"
 	"github.com/electrolux-oss/ik-tui/internal/resource/templates"
 )
 
@@ -17,6 +18,7 @@ func DefaultRegistry(c *client.Client) *Registry {
 		resources.Descriptor(c),
 		templates.Descriptor(c),
 		integrations.Descriptor(c),
+		storages.Descriptor(c),
 	)
 }
 

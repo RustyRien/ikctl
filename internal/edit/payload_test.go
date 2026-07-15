@@ -79,6 +79,28 @@ configuration:
 	}
 }
 
+func TestStorageInputFromYAML(t *testing.T) {
+	input, err := StorageInputFromYAML([]byte(`name: tf-state
+description: Terraform state bucket
+labels:
+  - prod
+configuration:
+  aws_bucket_name: team-state
+`))
+	if err != nil {
+		t.Fatalf("StorageInputFromYAML: %v", err)
+	}
+	if input["description"] != "Terraform state bucket" {
+		t.Fatalf("unexpected values: %#v", input)
+	}
+	if _, ok := input["name"]; ok {
+		t.Fatalf("did not expect name in input: %#v", input)
+	}
+	if _, ok := input["configuration"]; ok {
+		t.Fatalf("did not expect configuration in input: %#v", input)
+	}
+}
+
 func TestResourceYAMLIncludesOnlyEditableFields(t *testing.T) {
 	data, err := ResourceYAML(client.Resource{
 		ID:          "r1",
@@ -194,6 +216,37 @@ func TestIntegrationYAMLIncludesOnlyEditableFields(t *testing.T) {
 		}
 	}
 	for _, unwanted := range []string{"\nstatus:", "\ncreated_at:", "\nupdated_at:", "\nintegration_provider:", "\nintegration_type:", "\nentity_name:", "\nid:"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("did not expect YAML to contain %q, got:\n%s", unwanted, text)
+		}
+	}
+}
+
+func TestStorageYAMLIncludesOnlyEditableFields(t *testing.T) {
+	data, err := StorageYAML(client.Storage{
+		ID:            "st1",
+		Name:          "terraform-state",
+		Description:   "Primary state bucket",
+		Labels:        []string{"prod"},
+		Configuration: map[string]any{"aws_bucket_name": "tf-state"},
+		State:         "ready",
+		Status:        "ready",
+		StorageType:   "tofu",
+	})
+	if err != nil {
+		t.Fatalf("StorageYAML: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"description: Primary state bucket",
+		"labels:",
+		"- prod",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected YAML to contain %q, got:\n%s", want, text)
+		}
+	}
+	for _, unwanted := range []string{"\nname:", "\nconfiguration:", "\nstate:", "\nstatus:", "\nstorage_type:", "\ncreated_at:", "\nupdated_at:", "\nid:"} {
 		if strings.Contains(text, unwanted) {
 			t.Fatalf("did not expect YAML to contain %q, got:\n%s", unwanted, text)
 		}

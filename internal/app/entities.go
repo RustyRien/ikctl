@@ -22,6 +22,8 @@ func (a *App) openOverview(row tabledata.Row) {
 		a.openTemplateOverview(value.ID, value.Name)
 	case client.Integration:
 		a.openIntegrationOverview(value.ID, value.Name)
+	case client.Storage:
+		a.openStorageOverview(value.ID, value.Name)
 	}
 }
 
@@ -32,6 +34,8 @@ func (a *App) handleNav(key rune) {
 	switch key {
 	case 'r':
 		next = model.EntityResources
+	case 's':
+		next = model.EntityStorages
 	case 't':
 		next = model.EntityTemplates
 	case 'i':
@@ -57,6 +61,11 @@ func (a *App) handleNav(key rune) {
 	a.templateFilterTable = nil
 	a.templateFilterQuery = ""
 	a.templateFilterMode = false
+	a.storageFilterAllRows = nil
+	a.storageFilterRows = nil
+	a.storageFilterTable = nil
+	a.storageFilterQuery = ""
+	a.storageFilterMode = false
 	a.integrationFilterAllRows = nil
 	a.integrationFilterRows = nil
 	a.integrationFilterTable = nil
@@ -66,6 +75,7 @@ func (a *App) handleNav(key rune) {
 	a.templateColumnsTable = nil
 	a.activeTemplateDetail = nil
 	a.activeIntegrationDetail = nil
+	a.activeStorageDetail = nil
 	a.pendingEntityAction = nil
 	a.resourceReview = nil
 	a.overviewTree = nil
@@ -122,6 +132,11 @@ func (a *App) openEntitySelector() {
 	a.templateFilterTable = nil
 	a.templateFilterQuery = ""
 	a.templateFilterMode = false
+	a.storageFilterAllRows = nil
+	a.storageFilterRows = nil
+	a.storageFilterTable = nil
+	a.storageFilterQuery = ""
+	a.storageFilterMode = false
 	a.integrationFilterAllRows = nil
 	a.integrationFilterRows = nil
 	a.integrationFilterTable = nil
@@ -149,8 +164,10 @@ func (a *App) applySelectedEntity() {
 	case 1:
 		key = 'r'
 	case 2:
-		key = 't'
+		key = 's'
 	case 3:
+		key = 't'
+	case 4:
 		key = 'i'
 	default:
 		return
@@ -182,6 +199,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 		key   string
 	}{
 		{kind: model.EntityResources, label: "Resources", key: "r"},
+		{kind: model.EntityStorages, label: "Storages", key: "s"},
 		{kind: model.EntityTemplates, label: "Templates", key: "t"},
 		{kind: model.EntityIntegrations, label: "Integrations", key: "i"},
 	}
@@ -205,12 +223,14 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(table, 0, 1, true)
-	root.AddItem(overviewFooter("Enter apply  r/t/i quick switch  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("Enter apply  r/s/t/i quick switch  Esc/q close"), 1, 0, false)
 	return root, table
 }
 
 func entityTitle(kind model.EntityKind) string {
 	switch kind {
+	case model.EntityStorages:
+		return "Storages"
 	case model.EntityTemplates:
 		return "Templates"
 	case model.EntityIntegrations:
@@ -226,7 +246,10 @@ func (a *App) currentEntityTitle() string {
 		return title
 	}
 
-	filters := make([]string, 0, 2)
+	filters := make([]string, 0, 3)
+	if a.resourceStorageFilter != nil {
+		filters = append(filters, fmt.Sprintf("storage: %s", a.resourceStorageFilter.Name))
+	}
 	if a.resourceTemplateFilter != nil {
 		filters = append(filters, fmt.Sprintf("template: %s", a.resourceTemplateFilter.Name))
 	}
@@ -244,6 +267,8 @@ func (a *App) currentEntityTitle() string {
 
 func entityEmptyLabel(kind model.EntityKind) string {
 	switch kind {
+	case model.EntityStorages:
+		return "No storages"
 	case model.EntityTemplates:
 		return "No templates"
 	case model.EntityIntegrations:

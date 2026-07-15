@@ -486,3 +486,51 @@ func TestTemplateActions(t *testing.T) {
 		t.Fatalf("update template: %v", err)
 	}
 }
+
+func TestStorages(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "ListStorages"):
+			fmt.Fprint(w, `{"data":{"storages":[{"id":"st1","name":"terraform-state","storageType":"tofu","storageProvider":"aws","description":"Primary bucket","labels":["prod"],"state":"ready","status":"ready","resourcesCount":4,"executorsCount":1,"revisionNumber":2,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"storage","integration":{"id":"i1","name":"aws-prod","entityName":"integration","integrationProvider":"aws"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}],"storagesCount":1}}`)
+		case strings.Contains(req.Query, "GetStorage"):
+			fmt.Fprint(w, `{"data":{"storage":{"id":"st1","name":"terraform-state","storageType":"tofu","storageProvider":"aws","configuration":{"aws_bucket_name":"terraform-state"},"description":"Primary bucket","labels":["prod"],"state":"ready","status":"ready","resourcesCount":4,"executorsCount":1,"revisionNumber":2,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"storage","integration":{"id":"i1","name":"aws-prod","entityName":"integration","integrationProvider":"aws","integrationType":"cloud"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}}}`)
+		case strings.Contains(req.Query, "UpdateStorage"):
+			if req.Variables["id"] != "st1" {
+				t.Fatalf("update storage id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateStorage":{"id":"st1","name":"terraform-state","entityName":"storage"}}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	storages, err := client.Storages(context.Background(), map[string]any{"storage_provider": "aws"}, []string{"updated_at", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("storages query: %v", err)
+	}
+	if storages.Total != 1 || len(storages.Items) != 1 || storages.Items[0].Name != "terraform-state" {
+		t.Fatalf("storages = %#v", storages)
+	}
+
+	storage, err := client.Storage(context.Background(), "st1")
+	if err != nil {
+		t.Fatalf("storage query: %v", err)
+	}
+	if storage == nil || storage.StorageProvider != "aws" || storage.Integration == nil || storage.Integration.Name != "aws-prod" {
+		t.Fatalf("storage = %#v", storage)
+	}
+
+	if err := client.UpdateStorage(context.Background(), "st1", map[string]any{"description": "Updated"}); err != nil {
+		t.Fatalf("update storage: %v", err)
+	}
+}
