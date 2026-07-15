@@ -93,14 +93,14 @@ const templatesQuery = `query ListTemplates($filter: JSON, $sort: [String!], $ra
 }`
 
 const resourceQuery = `query GetResource($id: UUID!) {
-  resource(id: $id) {
-    id
-    name
-    entityName
-    description
-    state
-    status
-    createdAt
+	resource(id: $id) {
+		id
+		name
+		entityName
+		description
+		state
+		status
+		createdAt
     updatedAt
     revisionNumber
     abstract
@@ -159,6 +159,20 @@ const resourceQuery = `query GetResource($id: UUID!) {
       state
       status
     }
+  }
+}`
+
+const resourceActionsQuery = `query ResourceActions($id: UUID!) {
+  resourceActions(id: $id)
+}`
+
+const resourceTempStateQuery = `query ResourceTempState($id: UUID!) {
+  resourceTempStateByResource(resourceId: $id) {
+    id
+    resourceId
+    value
+    createdAt
+    updatedAt
   }
 }`
 
@@ -249,6 +263,14 @@ const updateResourceMutation = `mutation UpdateResource($id: UUID!, $input: Reso
     id
     name
     entityName
+  }
+}`
+
+const resourceActionMutation = `mutation ResourceAction($id: UUID!, $input: ResourceActionInput!) {
+  resourceAction(id: $id, input: $input) {
+    id
+    entityName
+    status
   }
 }`
 
@@ -387,6 +409,40 @@ func (c *Client) UpdateResource(ctx context.Context, id string, input map[string
 	return err
 }
 
+func (c *Client) ResourceActions(ctx context.Context, id string) ([]string, error) {
+	resp, err := query[resourceActionsQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: resourceActionsQuery,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.ResourceActions, nil
+}
+
+func (c *Client) ResourceTempState(ctx context.Context, id string) (*ResourceTempState, error) {
+	resp, err := query[resourceTempStateQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: resourceTempStateQuery,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.ResourceTempStateByResource, nil
+}
+
+func (c *Client) ApproveResource(ctx context.Context, id string) error {
+	return c.resourceAction(ctx, id, "approve")
+}
+
+func (c *Client) RejectResource(ctx context.Context, id string) error {
+	return c.resourceAction(ctx, id, "reject")
+}
+
 func (c *Client) UpdateTemplate(ctx context.Context, id string, input map[string]any) error {
 	_, err := query[updateTemplateMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: updateTemplateMutation,
@@ -400,6 +456,19 @@ func (c *Client) UpdateTemplate(ctx context.Context, id string, input map[string
 
 func (c *Client) EnableTemplate(ctx context.Context, id string) error {
 	return c.templateAction(ctx, id, "enable")
+}
+
+func (c *Client) resourceAction(ctx context.Context, id string, action string) error {
+	_, err := query[resourceActionMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: resourceActionMutation,
+		Variables: map[string]any{
+			"id": id,
+			"input": map[string]any{
+				"action": action,
+			},
+		},
+	})
+	return err
 }
 
 func (c *Client) DisableTemplate(ctx context.Context, id string) error {

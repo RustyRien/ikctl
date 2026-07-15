@@ -319,6 +319,9 @@ func (a *App) openResourceOverview(resource client.Resource) {
 		if err != nil {
 			primitive = errorView(fmt.Sprintf("Failed to load resource overview.\n\n%v", err))
 		} else if full != nil {
+			if actions, actionsErr := a.client.ResourceActions(ctx, full.ID); actionsErr == nil {
+				full.Actions = actions
+			}
 			primitive, lastLogView = resourceOverviewView(*full)
 			jumpActions = a.resourceOverviewJumpActions(*full)
 			if full.Template != nil && full.Template.ID != "" {
@@ -529,6 +532,8 @@ func (a *App) projectResourceList(_ []tabledata.Header, rows []tabledata.Row) ([
 }
 
 func resourceOverviewView(resource client.Resource) (tview.Primitive, *tview.TextView) {
+	reviewNotice := resourceReviewNoticeView(resource)
+
 	summary := kvTable("Summary", [][2]string{
 		{"Name", resource.Name},
 		{"ID", resource.ID},
@@ -593,12 +598,46 @@ func resourceOverviewView(resource client.Resource) (tview.Primitive, *tview.Tex
 		AddItem(lastLogView, 0, 1, false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	if reviewNotice != nil {
+		root.AddItem(reviewNotice, 3, 0, false)
+	}
 	root.AddItem(top, 12, 0, true)
 	root.AddItem(middle, 10, 0, false)
 	root.AddItem(bottom, 0, 1, false)
 	root.AddItem(overviewFooter(resourceTemplateHint(resource)), 1, 0, false)
 
 	return root, lastLogView
+}
+
+func resourceReviewNoticeView(resource client.Resource) tview.Primitive {
+	if !resourceNeedsReview(resource) {
+		return nil
+	}
+
+	view := tview.NewTextView()
+	view.SetDynamicColors(true)
+	view.SetWrap(true)
+	view.SetBorder(true)
+	view.SetTitle("Review")
+	if resource.Status == "approval_pending" {
+		view.SetText("[black:orange:b] Approval pending [-:-:-] [gold]This resource has pending changes that require review. Press [white::b]R[-:-:-] to inspect the temporary state diff.[-]")
+		return view
+	}
+	view.SetText("[black:yellow:b] Review available [-:-:-] [gold]Temporary resource changes detected. Press [white::b]R[-:-:-] to review the proposed diff.[-]")
+	return view
+}
+
+func resourceNeedsReview(resource client.Resource) bool {
+	return hasAction(resource.Actions, "approve") || hasAction(resource.Actions, "has_temporary_state") || resource.Status == "approval_pending"
+}
+
+func hasAction(actions []string, want string) bool {
+	for _, action := range actions {
+		if strings.EqualFold(strings.TrimSpace(action), want) {
+			return true
+		}
+	}
+	return false
 }
 
 func dependencyDetailsView(tags []map[string]any, config []map[string]any) tview.Primitive {
@@ -885,6 +924,9 @@ func resourceTemplateHint(resource client.Resource) string {
 	hints := make([]string, 0, 5)
 	hints = append(hints, "y yaml")
 	hints = append(hints, "E edit")
+	if resourceNeedsReview(resource) {
+		hints = append(hints, "R review")
+	}
 	if resource.Template != nil && resource.Template.ID != "" {
 		hints = append(hints, "t template")
 	}

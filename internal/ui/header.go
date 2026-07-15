@@ -69,7 +69,7 @@ var resourceOverviewHints = headerHints{
 		{{key: "y", label: "yaml"}, {key: "t", label: "template"}, {key: "i", label: "integrations"}},
 		{{key: "T", label: "tree"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
-		{{key: "E", label: "edit"}},
+		{{key: "E", label: "edit"}, {key: "R", label: "review"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }

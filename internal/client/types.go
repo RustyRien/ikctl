@@ -12,6 +12,7 @@ type Resource struct {
 	Description       string              `json:"description"`
 	State             string              `json:"state"`
 	Status            string              `json:"status"`
+	Actions           []string            `json:"actions"`
 	CreatedAt         time.Time           `json:"createdAt"`
 	UpdatedAt         time.Time           `json:"updatedAt"`
 	Labels            []string            `json:"labels"`
@@ -172,6 +173,14 @@ type resourceQueryData struct {
 	Resource *Resource `json:"resource"`
 }
 
+type resourceActionsQueryData struct {
+	ResourceActions []string `json:"resourceActions"`
+}
+
+type resourceTempStateQueryData struct {
+	ResourceTempStateByResource *ResourceTempState `json:"resourceTempStateByResource"`
+}
+
 type currentUserQueryData struct {
 	CurrentUser *User `json:"currentUser"`
 }
@@ -248,6 +257,10 @@ type updateResourceMutationData struct {
 	UpdateResource *entityActionResult `json:"updateResource"`
 }
 
+type resourceActionMutationData struct {
+	ResourceAction *entityActionResult `json:"resourceAction"`
+}
+
 type updateTemplateMutationData struct {
 	UpdateTemplate *templateUpdateResult `json:"updateTemplate"`
 }
@@ -297,6 +310,14 @@ type integrationUpdateResult struct {
 	Name                string `json:"name"`
 	EntityName          string `json:"entityName"`
 	IntegrationProvider string `json:"integrationProvider"`
+}
+
+type ResourceTempState struct {
+	ID         string         `json:"id"`
+	ResourceID string         `json:"resourceId"`
+	Value      map[string]any `json:"value"`
+	CreatedAt  FlexibleTime   `json:"createdAt"`
+	UpdatedAt  FlexibleTime   `json:"updatedAt"`
 }
 
 type LogStreamMessage struct {

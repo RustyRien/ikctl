@@ -7,6 +7,7 @@ import (
 
 	"github.com/electrolux-oss/ik-tui/internal/client"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
+	"github.com/rivo/tview"
 )
 
 func TestEntityActionPromptForRowSupportsTemplatesAndIntegrations(t *testing.T) {
@@ -177,5 +178,93 @@ func TestResourceTemplateHintIncludesEdit(t *testing.T) {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("resource hint missing %q in %q", want, hint)
 		}
+	}
+}
+
+func TestResourceTemplateHintIncludesReviewWhenApprovalAvailable(t *testing.T) {
+	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Actions: []string{"approve"}})
+	if !strings.Contains(hint, "R review") {
+		t.Fatalf("resource hint missing review in %q", hint)
+	}
+}
+
+func TestBuildResourceReviewDiffUsesTemporaryStateSubset(t *testing.T) {
+	resource := client.Resource{
+		ID:               "r1",
+		Name:             "redis-prod",
+		Description:      "Managed Redis",
+		Labels:           []string{"prod"},
+		Variables:        []map[string]any{{"name": "size", "value": "small"}},
+		DependencyTags:   []map[string]any{{"name": "env", "value": "prod"}},
+		DependencyConfig: []map[string]any{{"name": "region", "value": "eu-west-1"}},
+		Integrations:     []client.Integration{{ID: "i1"}},
+		Secrets:          []client.Secret{{ID: "s1"}},
+		Storage:          &client.Storage{ID: "st1"},
+		Workspace:        &client.Workspace{ID: "w1"},
+	}
+	tempState := &client.ResourceTempState{Value: map[string]any{
+		"description":     "Managed Redis updated",
+		"integration_ids": []any{"i1"},
+		"variables":       []any{map[string]any{"name": "size", "value": "large"}},
+	}}
+	diff, hasValue, err := buildResourceReviewDiff(resource, tempState)
+	if err != nil {
+		t.Fatalf("buildResourceReviewDiff: %v", err)
+	}
+	if !hasValue {
+		t.Fatal("expected diff content")
+	}
+	for _, want := range []string{"-description: Managed Redis", "+description: Managed Redis updated", "-      value: small", "+      value: large"} {
+		if !strings.Contains(diff, want) {
+			t.Fatalf("diff missing %q in %q", want, diff)
+		}
+	}
+	for _, want := range []string{"--- Current State", "+++ Temporary State", "@@"} {
+		if !strings.Contains(diff, want) {
+			t.Fatalf("diff header missing %q in %q", want, diff)
+		}
+	}
+}
+
+func TestResourceReviewNoticeViewShowsApprovalPendingMessage(t *testing.T) {
+	view := resourceReviewNoticeView(client.Resource{Status: "approval_pending"})
+	if view == nil {
+		t.Fatal("expected review notice view")
+	}
+	textView, ok := view.(*tview.TextView)
+	if !ok {
+		t.Fatalf("expected text view, got %T", view)
+	}
+	if text := textView.GetText(false); !strings.Contains(text, "Approval pending") || !strings.Contains(text, "Press [white::b]R") {
+		t.Fatalf("unexpected notice text %q", text)
+	}
+}
+
+func TestResourceReviewNoticeViewNilWithoutReview(t *testing.T) {
+	if view := resourceReviewNoticeView(client.Resource{}); view != nil {
+		t.Fatalf("expected nil notice, got %T", view)
+	}
+}
+
+func TestColorizeReviewDiffColorsGitStyleLines(t *testing.T) {
+	input := "--- Current State\n+++ Temporary State\n@@\n unchanged\n-old\n+new"
+	got := colorizeReviewDiff(input, true)
+	for _, want := range []string{
+		"[deepskyblue::b]--- Current State[-:-:-]",
+		"[deepskyblue::b]+++ Temporary State[-:-:-]",
+		"[mediumpurple::b]@@[-:-:-]",
+		"[red::b]-old[-:-:-]",
+		"[green::b]+new[-:-:-]",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("colored diff missing %q in %q", want, got)
+		}
+	}
+}
+
+func TestColorizeReviewDiffDisabledKeepsPlainText(t *testing.T) {
+	input := "+new\n-old"
+	if got := colorizeReviewDiff(input, false); got != input {
+		t.Fatalf("plain diff = %q", got)
 	}
 }

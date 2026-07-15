@@ -64,6 +64,20 @@ type entityActionPrompt struct {
 	Action func(context.Context) error
 }
 
+type resourceReviewState struct {
+	Resource     client.Resource
+	Actions      []string
+	TempState    *client.ResourceTempState
+	DiffText     string
+	Loading      bool
+	Approving    bool
+	Rejecting    bool
+	LoadErr      error
+	ActionErr    error
+	InfoMessage  string
+	DiffHasValue bool
+}
+
 var logLevelPrefixRX = regexp.MustCompile(`(?i)^\[(trace|debug|info|warn|warning|error|fatal)\]\s*`)
 var yamlKeyValRX = regexp.MustCompile(`\A(\s*)([\w\-./\s]+):\s(.+)\z`)
 var yamlListKeyValRX = regexp.MustCompile(`\A(\s*-\s)([\w\-./\s]+):\s(.+)\z`)
@@ -117,6 +131,7 @@ type App struct {
 	activeTemplateDetail      *templateDetailSelection
 	activeIntegrationDetail   *entityDetailSelection
 	pendingEntityAction       *entityActionPrompt
+	resourceReview            *resourceReviewState
 	liveLogMx                 sync.Mutex
 	liveLogCancel             context.CancelFunc
 	liveLogSession            int
@@ -177,6 +192,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetDisableFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "disable") })
 	ui.SetDeleteFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "delete") })
 	ui.SetEditFunc(app.openEntityEditor)
+	ui.SetReviewFunc(app.openResourceReview)
 	ui.SetNavFunc(app.handleNav)
 	ui.SetSortFunc(app.handleSort)
 	ui.SetLoadMoreFunc(app.requestLoadMore)
@@ -644,6 +660,27 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.pendingEntityAction = nil
 				return false
+			}
+		}
+		return false
+	}
+
+	if a.resourceReview != nil {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			a.clearResourceReview()
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'q':
+				a.clearResourceReview()
+				return false
+			case 'a':
+				a.performResourceReviewAction("approve")
+				return true
+			case 'r':
+				a.performResourceReviewAction("reject")
+				return true
 			}
 		}
 		return false

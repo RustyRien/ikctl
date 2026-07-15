@@ -43,6 +43,7 @@ type App struct {
 	disableFn           func(tabledata.Row)
 	deleteFn            func(tabledata.Row)
 	editFn              func(tabledata.Row)
+	reviewFn            func(tabledata.Row)
 	navFn               func(rune)
 	sortFn              func(int, bool)
 	loadMoreFn          func()
@@ -253,6 +254,10 @@ func (a *App) SetDeleteFunc(fn func(tabledata.Row)) {
 
 func (a *App) SetEditFunc(fn func(tabledata.Row)) {
 	a.editFn = fn
+}
+
+func (a *App) SetReviewFunc(fn func(tabledata.Row)) {
+	a.reviewFn = fn
 }
 
 func (a *App) SetNavFunc(fn func(rune)) {
@@ -664,6 +669,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				a.CloseOverlay()
 				return nil
 			}
+			if event.Rune() == 'R' && a.reviewFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.reviewFn(row)
+					return nil
+				}
+			}
 		}
 		return event
 	}
@@ -683,6 +694,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 			if event.Rune() == 'q' {
 				a.CloseDetail()
 				return nil
+			}
+			if event.Rune() == 'R' && a.reviewFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.reviewFn(row)
+					return nil
+				}
 			}
 			if event.Rune() == 'x' && a.disableFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
@@ -850,6 +867,13 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 			if a.editFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
 					a.editFn(row)
+				}
+			}
+			return nil
+		case 'R':
+			if a.reviewFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.reviewFn(row)
 				}
 			}
 			return nil

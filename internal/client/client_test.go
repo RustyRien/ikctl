@@ -136,12 +136,23 @@ func TestResourceAndLogs(t *testing.T) {
 
 		switch {
 		case strings.Contains(req.Query, "GetResource"):
-			fmt.Fprint(w, `{"data":{"resource":{"id":"r1","name":"redis-prod","entityName":"resource","description":"Managed Redis","state":"provisioned","status":"done","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","revisionNumber":2,"abstract":false,"storagePath":"ik-catalog/redis/prod.tfstate","labels":["prod"],"variables":[{"name":"size","value":"small"}],"outputs":[{"name":"host","value":"redis.example"}],"dependencyTags":[{"name":"env","value":"prod"}],"dependencyConfig":[{"name":"region","value":"eu-west-1"}],"template":{"id":"t1","name":"aws_redis","cloudResourceTypes":["redis"]},"workspace":{"id":"w1","name":"platform"},"storage":{"id":"st1","name":"terraform-state"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"},"integrationIds":[{"id":"i1","name":"aws-prod","integrationProvider":"aws","integrationType":"cloud"}],"secretIds":[{"id":"s1","name":"redis-password"}],"sourceCodeVersion":{"id":"scv1","identifier":"modules/redis:v1.2.3","sourceCodeFolder":"modules/redis","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","status":"ready"},"parents":[],"children":[]}}}`)
+			fmt.Fprint(w, `{"data":{"resource":{"id":"r1","name":"redis-prod","entityName":"resource","description":"Managed Redis","state":"provisioned","status":"done","actions":["has_temporary_state","approve"],"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","revisionNumber":2,"abstract":false,"storagePath":"ik-catalog/redis/prod.tfstate","labels":["prod"],"variables":[{"name":"size","value":"small"}],"outputs":[{"name":"host","value":"redis.example"}],"dependencyTags":[{"name":"env","value":"prod"}],"dependencyConfig":[{"name":"region","value":"eu-west-1"}],"template":{"id":"t1","name":"aws_redis","cloudResourceTypes":["redis"]},"workspace":{"id":"w1","name":"platform"},"storage":{"id":"st1","name":"terraform-state"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"},"integrationIds":[{"id":"i1","name":"aws-prod","integrationProvider":"aws","integrationType":"cloud"}],"secretIds":[{"id":"s1","name":"redis-password"}],"sourceCodeVersion":{"id":"scv1","identifier":"modules/redis:v1.2.3","sourceCodeFolder":"modules/redis","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","status":"ready"},"parents":[],"children":[]}}}`)
 		case strings.Contains(req.Query, "UpdateResource"):
 			if req.Variables["id"] != "r1" {
 				t.Fatalf("update resource id = %#v", req.Variables["id"])
 			}
 			fmt.Fprint(w, `{"data":{"updateResource":{"id":"r1","name":"redis-prod","entityName":"resource"}}}`)
+		case strings.Contains(req.Query, "ResourceActions"):
+			fmt.Fprint(w, `{"data":{"resourceActions":["approve","has_temporary_state"]}}`)
+		case strings.Contains(req.Query, "ResourceTempState"):
+			fmt.Fprint(w, `{"data":{"resourceTempStateByResource":{"id":"ts1","resourceId":"r1","value":{"name":"redis-prod","description":"Managed Redis updated","integration_ids":["i1"],"secret_ids":["s1"],"storage_id":"st1","storage_path":"ik-catalog/redis/prod.tfstate","variables":[{"name":"size","value":"large"}],"dependency_tags":[{"name":"env","value":"prod"}],"dependency_config":[{"name":"region","value":"eu-west-1"}],"labels":["prod"],"workspace_id":"w1","source_code_version_id":"scv1"},"createdAt":"2026-01-02T00:00:00Z","updatedAt":"2026-01-02T01:00:00Z"}}}`)
+		case strings.Contains(req.Query, "ResourceAction"):
+			input, _ := req.Variables["input"].(map[string]any)
+			action := input["action"]
+			if action != "approve" && action != "reject" {
+				t.Fatalf("resource action = %#v", action)
+			}
+			fmt.Fprintf(w, `{"data":{"resourceAction":{"id":"r1","entityName":"resource","status":"%s"}}}`, action)
 		case strings.Contains(req.Query, "ListLogs"):
 			filter, _ := req.Variables["filter"].(map[string]any)
 			if auditLogID, ok := filter["audit_log_id"]; ok {
@@ -213,6 +224,26 @@ func TestResourceAndLogs(t *testing.T) {
 	}
 	if err := client.UpdateResource(context.Background(), "r1", map[string]any{"name": "redis-prod"}); err != nil {
 		t.Fatalf("update resource: %v", err)
+	}
+	actions, err := client.ResourceActions(context.Background(), "r1")
+	if err != nil {
+		t.Fatalf("resource actions: %v", err)
+	}
+	if len(actions) != 2 || actions[0] != "approve" {
+		t.Fatalf("actions = %#v", actions)
+	}
+	tempState, err := client.ResourceTempState(context.Background(), "r1")
+	if err != nil {
+		t.Fatalf("resource temp state: %v", err)
+	}
+	if tempState == nil || tempState.Value["description"] != "Managed Redis updated" {
+		t.Fatalf("tempState = %#v", tempState)
+	}
+	if err := client.ApproveResource(context.Background(), "r1"); err != nil {
+		t.Fatalf("approve resource: %v", err)
+	}
+	if err := client.RejectResource(context.Background(), "r1"); err != nil {
+		t.Fatalf("reject resource: %v", err)
 	}
 }
 

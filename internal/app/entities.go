@@ -67,6 +67,7 @@ func (a *App) handleNav(key rune) {
 	a.activeTemplateDetail = nil
 	a.activeIntegrationDetail = nil
 	a.pendingEntityAction = nil
+	a.resourceReview = nil
 	a.overviewTree = nil
 	a.ui.CloseOverlay()
 	a.ui.ResetHeaderHotkeys()

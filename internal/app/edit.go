@@ -48,6 +48,10 @@ func (a *App) openEntityEditor(row tabledata.Row) {
 		return
 	}
 	a.requestRefresh()
+	if session.Kind == "resource" {
+		a.openResourceReview(tabledata.Row{Raw: client.Resource{ID: session.ID, Name: session.Name}})
+		return
+	}
 	a.reopenEditedDetail(session)
 }
 

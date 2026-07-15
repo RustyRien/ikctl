@@ -74,7 +74,11 @@ func ResourceYAML(raw any) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected resource, got %T", raw)
 	}
-	return YAMLBytes(map[string]any{
+	return YAMLBytes(ResourceEditableState(value))
+}
+
+func ResourceEditableState(value client.Resource) map[string]any {
+	return map[string]any{
 		"name":                   value.Name,
 		"description":            value.Description,
 		"source_code_version_id": optionalSourceCodeVersionID(value.SourceCodeVersion),
@@ -87,7 +91,7 @@ func ResourceYAML(raw any) ([]byte, error) {
 		"dependency_config":      value.DependencyConfig,
 		"labels":                 value.Labels,
 		"workspace_id":           optionalWorkspaceID(value.Workspace),
-	})
+	}
 }
 
 func TemplateYAML(raw any) ([]byte, error) {
