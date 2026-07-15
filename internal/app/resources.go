@@ -651,6 +651,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
+	a.activeWorkerDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading resource overview...")

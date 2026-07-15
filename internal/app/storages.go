@@ -20,6 +20,7 @@ func (a *App) openStorageOverview(id string, name string) {
 	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = &entityDetailSelection{ID: id, Name: name, Kind: "storages"}
+	a.activeWorkerDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading storage overview...")
@@ -43,6 +44,7 @@ func (a *App) openStorageOverview(id string, name string) {
 			jumpActions = a.storageOverviewJumpActions(*full)
 		} else {
 			a.activeStorageDetail = nil
+			a.activeWorkerDetail = nil
 			primitive = errorView("Storage not found")
 		}
 

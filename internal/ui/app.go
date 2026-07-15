@@ -90,6 +90,7 @@ const (
 	detailHotkeysSourceCodeVersionOverview
 	detailHotkeysIntegrationOverview
 	detailHotkeysStorageOverview
+	detailHotkeysWorkerOverview
 )
 
 var loadingFrames = []string{"|", "/", "-", "\\"}
@@ -472,6 +473,12 @@ func (a *App) SetStorageOverviewHotkeys() {
 	a.filterMenuMode = false
 	a.header.SetStorageOverviewHotkeys()
 	a.updateDetailHotkeys(detailHotkeysStorageOverview)
+}
+
+func (a *App) SetWorkerOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetWorkerOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysWorkerOverview)
 }
 
 func (a *App) CloseDetail() {
@@ -1067,6 +1074,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetIntegrationOverviewHotkeys()
 	case detailHotkeysStorageOverview:
 		a.header.SetStorageOverviewHotkeys()
+	case detailHotkeysWorkerOverview:
+		a.header.SetWorkerOverviewHotkeys()
 	default:
 		a.header.ResetHotkeys()
 	}

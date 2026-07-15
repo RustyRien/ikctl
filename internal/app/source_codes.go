@@ -20,6 +20,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
+	a.activeWorkerDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading source code overview...")
@@ -37,6 +38,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 		var jumpActions map[rune]func()
 		if err != nil {
 			a.activeSourceCodeDetail = nil
+			a.activeWorkerDetail = nil
 			primitive = errorView(fmt.Sprintf("Failed to load source code overview.\n\n%v", err))
 		} else if full != nil {
 			a.activeSourceCodeDetail = &entityDetailSelection{ID: full.ID, Name: full.DisplayName(), Kind: "source_codes"}
@@ -47,6 +49,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 			a.activeSourceCodeVersionDetail = nil
 			a.activeIntegrationDetail = nil
 			a.activeStorageDetail = nil
+			a.activeWorkerDetail = nil
 			primitive = errorView("Source code not found")
 		}
 

@@ -69,6 +69,7 @@ var entityActionDescriptions = map[string]map[string]string{
 		"delete":  "Delete the integration record.",
 	},
 	"storage": {},
+	"worker":  {},
 }
 
 var entityActionPriority = map[string]map[string]int{
@@ -78,6 +79,7 @@ var entityActionPriority = map[string]map[string]int{
 	"source_code_version": {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
 	"integration":         {"enable": 10, "disable": 20, "delete": 30},
 	"storage":             {},
+	"worker":              {},
 }
 
 var entityActionKindLabel = map[string]string{
@@ -87,6 +89,7 @@ var entityActionKindLabel = map[string]string{
 	"source_code_version": "source code version",
 	"integration":         "integration",
 	"storage":             "storage",
+	"worker":              "worker",
 }
 
 func titleCase(value string) string {
@@ -176,6 +179,8 @@ func (a *App) openEntityActionMenu(row tabledata.Row) {
 		})
 	case client.Storage:
 		a.ui.OpenOverlayPrimitive("Actions", errorView("Actions are not supported for storages"))
+	case client.Worker:
+		a.ui.OpenOverlayPrimitive("Actions", errorView("Actions are not supported for workers"))
 	default:
 		a.ui.OpenOverlayPrimitive("Actions", errorView("Actions are not supported for the selected item"))
 	}

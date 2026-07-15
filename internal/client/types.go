@@ -187,6 +187,23 @@ func (i Integration) GetName() string {
 	return i.Name
 }
 
+type Worker struct {
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	Host           string         `json:"host"`
+	HostMetadata   map[string]any `json:"hostMetadata"`
+	Status         string         `json:"status"`
+	CurrentTask    map[string]any `json:"currentTask"`
+	TasksCompleted *int           `json:"tasksCompleted"`
+	CreatedAt      time.Time      `json:"createdAt"`
+	UpdatedAt      time.Time      `json:"updatedAt"`
+	EntityName     string         `json:"entityName"`
+}
+
+func (w Worker) GetName() string {
+	return w.Name
+}
+
 type SourceCodeVersion struct {
 	ID                string           `json:"id"`
 	Identifier        string           `json:"identifier"`
@@ -317,6 +334,15 @@ type integrationsQueryData struct {
 
 type integrationQueryData struct {
 	Integration *Integration `json:"integration"`
+}
+
+type workersQueryData struct {
+	Workers      []Worker `json:"workers"`
+	WorkersCount int      `json:"workersCount"`
+}
+
+type workerQueryData struct {
+	Worker *Worker `json:"worker"`
 }
 
 type storagesQueryData struct {
@@ -524,6 +550,11 @@ type IntegrationsResult struct {
 
 type StoragesResult struct {
 	Items []Storage
+	Total int
+}
+
+type WorkersResult struct {
+	Items []Worker
 	Total int
 }
 

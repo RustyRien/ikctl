@@ -535,6 +535,48 @@ func TestStorages(t *testing.T) {
 	}
 }
 
+func TestWorkers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "ListWorkers"):
+			fmt.Fprint(w, `{"data":{"workers":[{"id":"wk1","name":"worker-a","host":"host-a","hostMetadata":{"platform":"linux","machine":"arm64"},"status":"ready","currentTask":{"entity":"resource","entity_id":"r1","action":"apply","user":"alice","started_at":"2026-01-02T00:00:00Z"},"tasksCompleted":12,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}],"workersCount":1}}`)
+		case strings.Contains(req.Query, "GetWorker"):
+			fmt.Fprint(w, `{"data":{"worker":{"id":"wk1","name":"worker-a","host":"host-a","hostMetadata":{"platform":"linux","machine":"arm64","cpu":{"count":8}},"status":"ready","currentTask":{"entity":"resource","entity_id":"r1","action":"apply","user":"alice","started_at":"2026-01-02T00:00:00Z"},"tasksCompleted":12,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	workers, err := client.Workers(context.Background(), map[string]any{"status": "ready"}, []string{"updated_at", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("workers query: %v", err)
+	}
+	if workers.Total != 1 || len(workers.Items) != 1 || workers.Items[0].Name != "worker-a" {
+		t.Fatalf("workers = %#v", workers)
+	}
+	if workers.Items[0].TasksCompleted == nil || *workers.Items[0].TasksCompleted != 12 {
+		t.Fatalf("tasks completed = %#v", workers.Items[0].TasksCompleted)
+	}
+
+	worker, err := client.Worker(context.Background(), "wk1")
+	if err != nil {
+		t.Fatalf("worker query: %v", err)
+	}
+	if worker == nil || worker.Host != "host-a" || worker.HostMetadata["platform"] != "linux" {
+		t.Fatalf("worker = %#v", worker)
+	}
+}
+
 func TestSourceCodes(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

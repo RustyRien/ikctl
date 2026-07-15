@@ -126,6 +126,14 @@ var storageOverviewHints = headerHints{
 	},
 }
 
+var workerOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
 var ikLogo = []string{
 	`.___ ___  __.`,
 	`|   |   |/ _|`,
@@ -229,6 +237,10 @@ func (h *Header) SetIntegrationOverviewHotkeys() {
 
 func (h *Header) SetStorageOverviewHotkeys() {
 	h.SetHotkeys(storageOverviewHints)
+}
+
+func (h *Header) SetWorkerOverviewHotkeys() {
+	h.SetHotkeys(workerOverviewHints)
 }
 
 func (h *Header) SetHotkeys(hints headerHints) {

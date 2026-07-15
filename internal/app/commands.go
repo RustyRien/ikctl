@@ -28,6 +28,7 @@ var availableCommands = []string{
 	"settings",
 	"storage-filter",
 	"storages",
+	"workers",
 	"template-filter",
 	"version-filter",
 	"templates",
@@ -52,6 +53,8 @@ func (a *App) runCommand(input string) {
 		a.handleNav('v')
 	case "s", "stg", "storage", "storages":
 		a.handleNav('s')
+	case "w", "wrk", "worker", "workers":
+		a.handleNav('w')
 	case "t", "tpl", "template", "templates":
 		a.handleNav('t')
 	case "i", "int", "integration", "integrations":
@@ -155,7 +158,7 @@ func (a *App) suggestCommand(input string) (string, []string) {
 }
 
 func (a *App) commandError(command string, message string) {
-	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :source-codes\n  :source-code-versions\n  :templates\n  :integrations\n  :storages\n  :refresh\n  :enable\n  :disable\n  :delete\n  :edit\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :storage-filter\n  :template-filter\n  :version-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
+	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :source-codes\n  :source-code-versions\n  :templates\n  :integrations\n  :storages\n  :workers\n  :refresh\n  :enable\n  :disable\n  :delete\n  :edit\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :storage-filter\n  :template-filter\n  :version-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
 	a.ui.OpenOverlayPrimitive("Command", view)
 }
 

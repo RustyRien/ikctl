@@ -53,6 +53,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
+	a.activeWorkerDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading template overview...")
@@ -76,6 +77,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 			jumpActions = a.templateOverviewJumpActions(*full)
 		} else {
 			a.activeTemplateDetail = nil
+			a.activeWorkerDetail = nil
 			primitive = errorView("Template not found")
 		}
 

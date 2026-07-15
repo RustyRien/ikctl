@@ -22,6 +22,7 @@ const (
 	EntityTemplates          EntityKind = "templates"
 	EntityIntegrations       EntityKind = "integrations"
 	EntityStorages           EntityKind = "storages"
+	EntityWorkers            EntityKind = "workers"
 )
 
 type EntityModel struct {

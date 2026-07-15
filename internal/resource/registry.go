@@ -9,6 +9,7 @@ import (
 	"github.com/electrolux-oss/ik-tui/internal/resource/source_codes"
 	"github.com/electrolux-oss/ik-tui/internal/resource/storages"
 	"github.com/electrolux-oss/ik-tui/internal/resource/templates"
+	"github.com/electrolux-oss/ik-tui/internal/resource/workers"
 )
 
 type Descriptor = core.Descriptor
@@ -23,6 +24,7 @@ func DefaultRegistry(c *client.Client) *Registry {
 		templates.Descriptor(c),
 		integrations.Descriptor(c),
 		storages.Descriptor(c),
+		workers.Descriptor(c),
 	)
 }
 

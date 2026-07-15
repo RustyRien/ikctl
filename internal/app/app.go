@@ -145,6 +145,7 @@ type App struct {
 	activeSourceCodeVersionDetail   *entityDetailSelection
 	activeIntegrationDetail         *entityDetailSelection
 	activeStorageDetail             *entityDetailSelection
+	activeWorkerDetail              *entityDetailSelection
 	pendingEntityAction             *entityActionPrompt
 	resourceReview                  *resourceReviewState
 	liveLogMx                       sync.Mutex
@@ -370,6 +371,10 @@ func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string
 	case client.Storage:
 		return fmt.Sprintf("YAML: Storage %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.Storage(ctx, id)
+		}, true
+	case client.Worker:
+		return fmt.Sprintf("YAML: Worker %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Worker(ctx, id)
 		}, true
 	default:
 		return "", "", nil, false
@@ -752,7 +757,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.entitySelectorTable = nil
 				return false
-			case 'r', 'c', 'v', 's', 't', 'i':
+			case 'r', 'c', 'v', 's', 'w', 't', 'i':
 				a.entitySelectorTable = nil
 				a.ui.CloseOverlay()
 				a.handleNav(event.Rune())
@@ -1619,6 +1624,8 @@ func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, 
 		return value.ID, value.Name, "integration", true
 	case client.Storage:
 		return value.ID, value.Name, "storage", true
+	case client.Worker:
+		return value.ID, value.Name, "worker", true
 	default:
 		return "", "", "", false
 	}

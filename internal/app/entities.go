@@ -28,6 +28,8 @@ func (a *App) openOverview(row tabledata.Row) {
 		a.openIntegrationOverview(value.ID, value.Name)
 	case client.Storage:
 		a.openStorageOverview(value.ID, value.Name)
+	case client.Worker:
+		a.openWorkerOverview(value.ID, value.Name)
 	}
 }
 
@@ -44,6 +46,8 @@ func (a *App) handleNav(key rune) {
 		next = model.EntitySourceCodeVersions
 	case 's':
 		next = model.EntityStorages
+	case 'w':
+		next = model.EntityWorkers
 	case 't':
 		next = model.EntityTemplates
 	case 'i':
@@ -91,6 +95,7 @@ func (a *App) handleNav(key rune) {
 	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
+	a.activeWorkerDetail = nil
 	a.pendingEntityAction = nil
 	a.resourceReview = nil
 	a.overviewTree = nil
@@ -190,8 +195,10 @@ func (a *App) applySelectedEntity() {
 	case 4:
 		key = 's'
 	case 5:
-		key = 't'
+		key = 'w'
 	case 6:
+		key = 't'
+	case 7:
 		key = 'i'
 	default:
 		return
@@ -226,6 +233,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 		{kind: model.EntitySourceCodes, label: "Source Codes", key: "c"},
 		{kind: model.EntitySourceCodeVersions, label: "Source Code Versions", key: "v"},
 		{kind: model.EntityStorages, label: "Storages", key: "s"},
+		{kind: model.EntityWorkers, label: "Workers", key: "w"},
 		{kind: model.EntityTemplates, label: "Templates", key: "t"},
 		{kind: model.EntityIntegrations, label: "Integrations", key: "i"},
 	}
@@ -249,7 +257,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(table, 0, 1, true)
-	root.AddItem(overviewFooter("Enter apply  r/c/v/s/t/i quick switch  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("Enter apply  r/c/v/s/w/t/i quick switch  Esc/q close"), 1, 0, false)
 	return root, table
 }
 
@@ -261,6 +269,8 @@ func entityTitle(kind model.EntityKind) string {
 		return "Source Code Versions"
 	case model.EntityStorages:
 		return "Storages"
+	case model.EntityWorkers:
+		return "Workers"
 	case model.EntityTemplates:
 		return "Templates"
 	case model.EntityIntegrations:
@@ -306,6 +316,8 @@ func entityEmptyLabel(kind model.EntityKind) string {
 		return "No source code versions"
 	case model.EntityStorages:
 		return "No storages"
+	case model.EntityWorkers:
+		return "No workers"
 	case model.EntityTemplates:
 		return "No templates"
 	case model.EntityIntegrations:

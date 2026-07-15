@@ -20,6 +20,7 @@ func (a *App) openSourceCodeVersionOverview(id string, name string) {
 	a.activeSourceCodeVersionDetail = &entityDetailSelection{ID: id, Name: name, Kind: "source_code_versions"}
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
+	a.activeWorkerDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading source code version overview...")
@@ -37,6 +38,7 @@ func (a *App) openSourceCodeVersionOverview(id string, name string) {
 		var jumpActions map[rune]func()
 		if err != nil {
 			a.activeSourceCodeVersionDetail = nil
+			a.activeWorkerDetail = nil
 			primitive = errorView(fmt.Sprintf("Failed to load source code version overview.\n\n%v", err))
 		} else if full != nil {
 			a.activeSourceCodeVersionDetail = &entityDetailSelection{ID: full.ID, Name: full.GetName(), Kind: "source_code_versions"}
@@ -44,6 +46,7 @@ func (a *App) openSourceCodeVersionOverview(id string, name string) {
 			jumpActions = a.sourceCodeVersionOverviewJumpActions(*full)
 		} else {
 			a.activeSourceCodeVersionDetail = nil
+			a.activeWorkerDetail = nil
 			primitive = errorView("Source code version not found")
 		}
 

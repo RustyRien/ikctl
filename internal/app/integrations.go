@@ -20,6 +20,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 	a.activeSourceCodeVersionDetail = nil
 	a.activeIntegrationDetail = &entityDetailSelection{ID: id, Name: name, Kind: "integrations"}
 	a.activeStorageDetail = nil
+	a.activeWorkerDetail = nil
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading integration overview...")
@@ -43,6 +44,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 			jumpActions = a.integrationOverviewJumpActions(*full)
 		} else {
 			a.activeIntegrationDetail = nil
+			a.activeWorkerDetail = nil
 			primitive = errorView("Integration not found")
 		}
 

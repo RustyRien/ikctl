@@ -147,6 +147,7 @@ func TestYAMLDetailForRowSupportsEntities(t *testing.T) {
 		{name: "template", row: tabledata.Row{Raw: client.Template{ID: "t1", Name: "base"}}, wantTitle: "YAML: Template base"},
 		{name: "integration", row: tabledata.Row{Raw: client.Integration{ID: "i1", Name: "aws"}}, wantTitle: "YAML: Integration aws"},
 		{name: "storage", row: tabledata.Row{Raw: client.Storage{ID: "st1", Name: "state"}}, wantTitle: "YAML: Storage state"},
+		{name: "worker", row: tabledata.Row{Raw: client.Worker{ID: "w1", Name: "runner"}}, wantTitle: "YAML: Worker runner"},
 	}
 
 	a := &App{client: &client.Client{}}
