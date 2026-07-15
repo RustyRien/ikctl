@@ -68,6 +68,27 @@ func IntegrationInputFromYAML(data []byte) (map[string]any, error) {
 	return input, nil
 }
 
+func SecretInputFromYAML(current client.Secret, data []byte) (map[string]any, error) {
+	decoded, err := ParseYAMLMap(data)
+	if err != nil {
+		return nil, err
+	}
+	input := map[string]any{}
+	copyOptional(input, decoded,
+		fieldPair{"description", "description"},
+		fieldPair{"labels", "labels"},
+		fieldPair{"configuration", "configuration"},
+	)
+	if value, ok := decoded["secret_provider"]; ok {
+		input["secretProvider"] = value
+	} else if value, ok := decoded["secretProvider"]; ok {
+		input["secretProvider"] = value
+	} else if _, ok := input["configuration"]; ok && current.SecretProvider != "" {
+		input["secretProvider"] = current.SecretProvider
+	}
+	return input, nil
+}
+
 func StorageInputFromYAML(data []byte) (map[string]any, error) {
 	decoded, err := ParseYAMLMap(data)
 	if err != nil {
@@ -160,6 +181,19 @@ func IntegrationYAML(raw any) ([]byte, error) {
 		"description":   value.Description,
 		"labels":        value.Labels,
 		"configuration": value.Configuration,
+	})
+}
+
+func SecretYAML(raw any) ([]byte, error) {
+	value, ok := raw.(client.Secret)
+	if !ok {
+		return nil, fmt.Errorf("expected secret, got %T", raw)
+	}
+	return YAMLBytes(map[string]any{
+		"description":     value.Description,
+		"labels":          value.Labels,
+		"secret_provider": value.SecretProvider,
+		"configuration":   value.Configuration,
 	})
 }
 

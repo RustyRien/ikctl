@@ -49,6 +49,7 @@ type App struct {
 	sortFn                    func(int, bool)
 	loadMoreFn                func()
 	storageFilterFn           func()
+	secretFilterFn            func()
 	templateFilterFn          func()
 	sourceCodeVersionFilterFn func()
 	integrationFilterFn       func()
@@ -88,6 +89,7 @@ const (
 	detailHotkeysTemplateOverview
 	detailHotkeysSourceCodeOverview
 	detailHotkeysSourceCodeVersionOverview
+	detailHotkeysSecretOverview
 	detailHotkeysIntegrationOverview
 	detailHotkeysStorageOverview
 	detailHotkeysWorkerOverview
@@ -287,6 +289,10 @@ func (a *App) SetStorageFilterFunc(fn func()) {
 	a.storageFilterFn = fn
 }
 
+func (a *App) SetSecretFilterFunc(fn func()) {
+	a.secretFilterFn = fn
+}
+
 func (a *App) SetTemplateFilterFunc(fn func()) {
 	a.templateFilterFn = fn
 }
@@ -463,6 +469,12 @@ func (a *App) SetSourceCodeVersionOverviewHotkeys() {
 	a.updateDetailHotkeys(detailHotkeysSourceCodeVersionOverview)
 }
 
+func (a *App) SetSecretOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetSecretOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysSecretOverview)
+}
+
 func (a *App) SetIntegrationOverviewHotkeys() {
 	a.filterMenuMode = false
 	a.header.SetIntegrationOverviewHotkeys()
@@ -605,6 +617,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				a.exitFilterMenuMode()
 				if a.storageFilterFn != nil {
 					a.storageFilterFn()
+				}
+				return nil
+			case 'k':
+				a.exitFilterMenuMode()
+				if a.secretFilterFn != nil {
+					a.secretFilterFn()
 				}
 				return nil
 			case 'i':
@@ -939,7 +957,7 @@ func (a *App) renderStatus() {
 		return
 	}
 	if a.filterMenuMode {
-		a.status.SetText(a.withLoadingSuffix("Choose filter: s storage, i integration, t template, v version, d hide destroyed, c reset all  Esc back"))
+		a.status.SetText(a.withLoadingSuffix("Choose filter: s storage, k secret, i integration, t template, v version, d hide destroyed, c reset all  Esc back"))
 		return
 	}
 	if a.table.SortMode() {
@@ -1070,6 +1088,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetSourceCodeOverviewHotkeys()
 	case detailHotkeysSourceCodeVersionOverview:
 		a.header.SetSourceCodeVersionOverviewHotkeys()
+	case detailHotkeysSecretOverview:
+		a.header.SetSecretOverviewHotkeys()
 	case detailHotkeysIntegrationOverview:
 		a.header.SetIntegrationOverviewHotkeys()
 	case detailHotkeysStorageOverview:

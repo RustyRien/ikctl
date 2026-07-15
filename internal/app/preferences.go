@@ -15,6 +15,9 @@ func (a *App) applySavedViewPreferences() {
 	if ref := a.config.View.Resources.StorageFilter; ref.ID != "" {
 		a.resourceStorageFilter = &client.Storage{ID: ref.ID, Name: ref.Name}
 	}
+	if ref := a.config.View.Resources.SecretFilter; ref.ID != "" {
+		a.resourceSecretFilter = &client.Secret{ID: ref.ID, Name: ref.Name}
+	}
 	if ref := a.config.View.Resources.TemplateFilter; ref.ID != "" {
 		a.resourceTemplateFilter = &client.Template{ID: ref.ID, Name: ref.Name}
 	}
@@ -31,6 +34,7 @@ func (a *App) saveViewPreferences() {
 	a.config.View.Resources.Columns = selectedFields(a.visibleResourceColumns, resourceColumnOptions)
 	a.config.View.Templates.Columns = selectedFields(a.visibleTemplateColumns, templateColumnOptions)
 	a.config.View.Resources.StorageFilter = storageFilterRef(a.resourceStorageFilter)
+	a.config.View.Resources.SecretFilter = secretFilterRef(a.resourceSecretFilter)
 	a.config.View.Resources.TemplateFilter = templateFilterRef(a.resourceTemplateFilter)
 	a.config.View.Resources.SourceCodeVersionFilter = sourceCodeVersionFilterRef(a.resourceSourceCodeVersionFilter)
 	a.config.View.Resources.IntegrationFilter = integrationFilterRef(a.resourceIntegrationFilter)
@@ -76,6 +80,13 @@ func selectedFields(visible map[string]bool, options []resourceColumnOption) []s
 }
 
 func templateFilterRef(value *client.Template) config.FilterRef {
+	if value == nil {
+		return config.FilterRef{}
+	}
+	return config.FilterRef{ID: value.ID, Name: value.Name}
+}
+
+func secretFilterRef(value *client.Secret) config.FilterRef {
 	if value == nil {
 		return config.FilterRef{}
 	}

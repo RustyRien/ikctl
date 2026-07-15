@@ -110,6 +110,8 @@ func (a *App) editSessionForRow(row tabledata.Row) (editcore.Session, error) {
 		kind, id, name = "source_code", value.ID, valueOr(value.DisplayName(), value.ID)
 	case client.SourceCodeVersion:
 		kind, id, name = "source_code_version", value.ID, valueOr(value.GetName(), value.ID)
+	case client.Secret:
+		kind, id, name = "secret", value.ID, value.Name
 	case client.Integration:
 		kind, id, name = "integration", value.ID, value.Name
 	case client.Storage:
@@ -137,6 +139,8 @@ func (a *App) reopenEditedDetail(session editcore.Session) {
 		a.openSourceCodeOverview(session.ID, session.Name)
 	case "source_code_version":
 		a.openSourceCodeVersionOverview(session.ID, session.Name)
+	case "secret":
+		a.openSecretOverview(session.ID, session.Name)
 	case "integration":
 		a.openIntegrationOverview(session.ID, session.Name)
 	case "storage":

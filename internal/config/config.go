@@ -41,6 +41,7 @@ type ViewConfig struct {
 type ResourceViewConfig struct {
 	Columns                 []string  `yaml:"columns,omitempty"`
 	StorageFilter           FilterRef `yaml:"storage_filter,omitempty"`
+	SecretFilter            FilterRef `yaml:"secret_filter,omitempty"`
 	TemplateFilter          FilterRef `yaml:"template_filter,omitempty"`
 	SourceCodeVersionFilter FilterRef `yaml:"source_code_version_filter,omitempty"`
 	IntegrationFilter       FilterRef `yaml:"integration_filter,omitempty"`
@@ -287,7 +288,7 @@ func (v ViewConfig) Empty() bool {
 }
 
 func (v ResourceViewConfig) Empty() bool {
-	return len(v.Columns) == 0 && v.StorageFilter.Empty() && v.TemplateFilter.Empty() && v.SourceCodeVersionFilter.Empty() && v.IntegrationFilter.Empty() && !v.HideDestroyed
+	return len(v.Columns) == 0 && v.StorageFilter.Empty() && v.SecretFilter.Empty() && v.TemplateFilter.Empty() && v.SourceCodeVersionFilter.Empty() && v.IntegrationFilter.Empty() && !v.HideDestroyed
 }
 
 func (v TemplateViewConfig) Empty() bool {

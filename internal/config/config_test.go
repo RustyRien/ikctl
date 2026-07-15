@@ -133,6 +133,7 @@ func TestSavePersistsTUIViewPreferences(t *testing.T) {
 			Resources: ResourceViewConfig{
 				Columns:                 []string{"name", "status", "age"},
 				StorageFilter:           FilterRef{ID: "st-1", Name: "terraform-state"},
+				SecretFilter:            FilterRef{ID: "sec-1", Name: "prod-aws-creds"},
 				TemplateFilter:          FilterRef{ID: "tpl-1", Name: "base-template"},
 				SourceCodeVersionFilter: FilterRef{ID: "scv-1", Name: "modules/redis:v1.2.3"},
 				IntegrationFilter:       FilterRef{ID: "int-1", Name: "aws"},
@@ -157,6 +158,9 @@ func TestSavePersistsTUIViewPreferences(t *testing.T) {
 	}
 	if reloaded.View.Resources.StorageFilter.ID != "st-1" || reloaded.View.Resources.StorageFilter.Name != "terraform-state" {
 		t.Fatalf("unexpected storage filter: %#v", reloaded.View.Resources.StorageFilter)
+	}
+	if reloaded.View.Resources.SecretFilter.ID != "sec-1" || reloaded.View.Resources.SecretFilter.Name != "prod-aws-creds" {
+		t.Fatalf("unexpected secret filter: %#v", reloaded.View.Resources.SecretFilter)
 	}
 	if reloaded.View.Resources.TemplateFilter.ID != "tpl-1" || reloaded.View.Resources.TemplateFilter.Name != "base-template" {
 		t.Fatalf("unexpected template filter: %#v", reloaded.View.Resources.TemplateFilter)

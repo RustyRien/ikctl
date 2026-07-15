@@ -49,6 +49,7 @@ go run . get resources
 go run . get resources -o wide
 go run . get resources redis-prod
 go run . get templates --sort name --sort-order asc
+go run . get secrets --provider aws
 go run . get integrations -o json
 go run . get workers
 go run . get source_code_versions
@@ -74,6 +75,7 @@ go run . disable source_code_versions modules/redis:v1.2.3
 go run . delete source_code_versions modules/redis:v1.2.3
 go run . edit resources redis-prod
 go run . edit templates aws_redis
+go run . edit secrets redis-password
 go run . edit integrations aws-prod
 go run . edit source_code_versions modules/redis:v1.2.3
 ```
@@ -121,7 +123,7 @@ Precedence: flags > env > config file > defaults.
 - `ikctl disable source_code_versions <name-or-id>` sends a disable action for a source code version.
 - `ikctl enable source_code_versions <name-or-id>` sends an enable action for a source code version.
 - `ikctl delete source_code_versions <name-or-id>` deletes a source code version.
-- Supported entities: `resources`, `source_codes`, `source_code_versions`, `templates`, `integrations`, `storages`, `workers`.
+- Supported entities: `resources`, `source_codes`, `source_code_versions`, `templates`, `secrets`, `integrations`, `storages`, `workers`.
 - Output formats: `table`, `wide`, `json`, `yaml`, `name`.
 - Common flags: `-o`, `--sort`, `--sort-order`, `--limit`, `--filter key=value`.
 - Global flags are inherited by subcommands: `--config`, `--endpoint`, `--token`, `--refresh`, `--insecure-skip-tls-verify`, `--no-colors`.
@@ -130,6 +132,7 @@ Precedence: flags > env > config file > defaults.
 - `--since` accepts either a Go duration like `1h30m` or an RFC3339 timestamp like `2026-07-02T10:30:00Z`.
 - Entity-specific filters:
   - resources: `--state`, `--status`, `--label`
+  - secrets: `--provider`, `--type`, `--state`, `--status`, `--label`, `--name`
   - integrations: `--provider`, `--type`
   - source_code_versions: `--status`, `--label`, `--name`, `--filter tag=...`, `--filter folder=...`, `--filter template=...`
 
@@ -151,7 +154,7 @@ Auth notes:
 - `E`: edit selected resource/template/integration in your editor
 - `Esc`, `q`: close detail view
 - `s`: enter sort mode, press a highlighted column number, then `a` for ascending or `d` for descending to fetch sorted results from the backend, `Esc` to cancel
-- `e`: choose entity (`r` resources, `c` source codes, `v` source code versions, `s` storages, `w` workers, `t` templates, `i` integrations)
+- `e`: choose entity (`r` resources, `c` source codes, `v` source code versions, `k` secrets, `s` storages, `w` workers, `t` templates, `i` integrations)
 
 Command mode also supports `:enable`, `:disable`, `:delete`, and `:edit` for the currently selected entity, but the TUI hotkey flow for enable/disable now goes through `A` actions.
 

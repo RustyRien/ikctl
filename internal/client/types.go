@@ -148,8 +148,27 @@ func (s SourceCode) GetName() string {
 }
 
 type Secret struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	Description    string         `json:"description"`
+	SecretType     string         `json:"secretType"`
+	SecretProvider string         `json:"secretProvider"`
+	Configuration  map[string]any `json:"configuration"`
+	Labels         []string       `json:"labels"`
+	State          string         `json:"state"`
+	Status         string         `json:"status"`
+	ResourcesCount int            `json:"resourcesCount"`
+	ExecutorsCount int            `json:"executorsCount"`
+	RevisionNumber int            `json:"revisionNumber"`
+	CreatedAt      time.Time      `json:"createdAt"`
+	UpdatedAt      time.Time      `json:"updatedAt"`
+	EntityName     string         `json:"entityName"`
+	Integration    *Integration   `json:"integration"`
+	Creator        *Creator       `json:"creator"`
+}
+
+func (s Secret) GetName() string {
+	return s.Name
 }
 
 type Creator struct {
@@ -301,6 +320,15 @@ type templateQueryData struct {
 	Template *Template `json:"template"`
 }
 
+type secretsQueryData struct {
+	Secrets      []Secret `json:"secrets"`
+	SecretsCount int      `json:"secretsCount"`
+}
+
+type secretQueryData struct {
+	Secret *Secret `json:"secret"`
+}
+
 type TemplateTreeNode struct {
 	ID       string             `json:"id"`
 	NodeID   string             `json:"nodeId"`
@@ -424,6 +452,10 @@ type updateIntegrationMutationData struct {
 	UpdateIntegration *integrationUpdateResult `json:"updateIntegration"`
 }
 
+type updateSecretMutationData struct {
+	UpdateSecret *secretUpdateResult `json:"updateSecret"`
+}
+
 type updateStorageMutationData struct {
 	UpdateStorage *entityActionResult `json:"updateStorage"`
 }
@@ -487,6 +519,13 @@ type integrationUpdateResult struct {
 	IntegrationProvider string `json:"integrationProvider"`
 }
 
+type secretUpdateResult struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	EntityName     string `json:"entityName"`
+	SecretProvider string `json:"secretProvider"`
+}
+
 type ResourceTempState struct {
 	ID         string         `json:"id"`
 	ResourceID string         `json:"resourceId"`
@@ -540,6 +579,11 @@ type ResourcesResult struct {
 
 type TemplatesResult struct {
 	Items []Template
+	Total int
+}
+
+type SecretsResult struct {
+	Items []Secret
 	Total int
 }
 

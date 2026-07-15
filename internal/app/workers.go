@@ -20,6 +20,7 @@ func (a *App) openWorkerOverview(id string, name string) {
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
+	a.activeSecretDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = &entityDetailSelection{ID: id, Name: name, Kind: "workers"}

@@ -18,6 +18,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = &entityDetailSelection{ID: id, Name: name, Kind: "source_codes"}
 	a.activeSourceCodeVersionDetail = nil
+	a.activeSecretDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
@@ -47,6 +48,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 		} else {
 			a.activeSourceCodeDetail = nil
 			a.activeSourceCodeVersionDetail = nil
+			a.activeSecretDetail = nil
 			a.activeIntegrationDetail = nil
 			a.activeStorageDetail = nil
 			a.activeWorkerDetail = nil

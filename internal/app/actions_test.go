@@ -256,6 +256,13 @@ func TestResourceTemplateHintIncludesEdit(t *testing.T) {
 	}
 }
 
+func TestResourceTemplateHintIncludesSecretsWhenAvailable(t *testing.T) {
+	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Secrets: []client.Secret{{ID: "s1", Name: "prod-aws-creds"}}})
+	if !strings.Contains(hint, "k secrets") {
+		t.Fatalf("resource hint missing secrets in %q", hint)
+	}
+}
+
 func TestResourceTemplateHintIncludesDeleteWhenAvailable(t *testing.T) {
 	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Actions: []string{"delete"}})
 	if !strings.Contains(hint, "D delete") {

@@ -34,6 +34,7 @@ var filterMenuHeaderHints = headerHints{
 	main: defaultHeaderHints.main,
 	filters: [][]menuHint{
 		{{key: "s", label: "storage"}},
+		{{key: "k", label: "secret"}},
 		{{key: "i", label: "integration"}},
 		{{key: "t", label: "template"}},
 		{{key: "v", label: "version"}},
@@ -69,7 +70,7 @@ var resourceOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
 		{{key: "y", label: "yaml"}, {key: "t", label: "template"}, {key: "s", label: "storage"}, {key: "v", label: "version"}},
-		{{key: "i", label: "integrations"}},
+		{{key: "i", label: "integrations"}, {key: "k", label: "secrets"}},
 		{{key: "T", label: "tree"}},
 		{{key: "A", label: "actions"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
 		{{key: "R", label: "review"}},
@@ -103,6 +104,15 @@ var sourceCodeVersionOverviewHints = headerHints{
 		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
 		{{key: "A", label: "actions"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
 		{{key: "r", label: "resources"}, {key: "t", label: "template"}, {key: "c", label: "source code"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
+var secretOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "r", label: "resources"}, {key: "E", label: "edit"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }
@@ -229,6 +239,10 @@ func (h *Header) SetSourceCodeOverviewHotkeys() {
 
 func (h *Header) SetSourceCodeVersionOverviewHotkeys() {
 	h.SetHotkeys(sourceCodeVersionOverviewHints)
+}
+
+func (h *Header) SetSecretOverviewHotkeys() {
+	h.SetHotkeys(secretOverviewHints)
 }
 
 func (h *Header) SetIntegrationOverviewHotkeys() {

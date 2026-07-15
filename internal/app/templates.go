@@ -51,6 +51,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 	a.activeTemplateDetail = &templateDetailSelection{ID: id, Name: name}
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
+	a.activeSecretDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil

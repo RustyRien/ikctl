@@ -24,6 +24,8 @@ func (a *App) openOverview(row tabledata.Row) {
 		a.openSourceCodeVersionOverview(value.ID, valueOr(value.GetName(), value.ID))
 	case client.Template:
 		a.openTemplateOverview(value.ID, value.Name)
+	case client.Secret:
+		a.openSecretOverview(value.ID, value.Name)
 	case client.Integration:
 		a.openIntegrationOverview(value.ID, value.Name)
 	case client.Storage:
@@ -44,6 +46,8 @@ func (a *App) handleNav(key rune) {
 		next = model.EntitySourceCodes
 	case 'v':
 		next = model.EntitySourceCodeVersions
+	case 'k':
+		next = model.EntitySecrets
 	case 's':
 		next = model.EntityStorages
 	case 'w':
@@ -83,6 +87,11 @@ func (a *App) handleNav(key rune) {
 	a.storageFilterTable = nil
 	a.storageFilterQuery = ""
 	a.storageFilterMode = false
+	a.secretFilterAllRows = nil
+	a.secretFilterRows = nil
+	a.secretFilterTable = nil
+	a.secretFilterQuery = ""
+	a.secretFilterMode = false
 	a.integrationFilterAllRows = nil
 	a.integrationFilterRows = nil
 	a.integrationFilterTable = nil
@@ -93,6 +102,7 @@ func (a *App) handleNav(key rune) {
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
+	a.activeSecretDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
@@ -162,6 +172,11 @@ func (a *App) openEntitySelector() {
 	a.storageFilterTable = nil
 	a.storageFilterQuery = ""
 	a.storageFilterMode = false
+	a.secretFilterAllRows = nil
+	a.secretFilterRows = nil
+	a.secretFilterTable = nil
+	a.secretFilterQuery = ""
+	a.secretFilterMode = false
 	a.integrationFilterAllRows = nil
 	a.integrationFilterRows = nil
 	a.integrationFilterTable = nil
@@ -193,12 +208,14 @@ func (a *App) applySelectedEntity() {
 	case 3:
 		key = 'v'
 	case 4:
-		key = 's'
+		key = 'k'
 	case 5:
-		key = 'w'
+		key = 's'
 	case 6:
-		key = 't'
+		key = 'w'
 	case 7:
+		key = 't'
+	case 8:
 		key = 'i'
 	default:
 		return
@@ -232,6 +249,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 		{kind: model.EntityResources, label: "Resources", key: "r"},
 		{kind: model.EntitySourceCodes, label: "Source Codes", key: "c"},
 		{kind: model.EntitySourceCodeVersions, label: "Source Code Versions", key: "v"},
+		{kind: model.EntitySecrets, label: "Secrets", key: "k"},
 		{kind: model.EntityStorages, label: "Storages", key: "s"},
 		{kind: model.EntityWorkers, label: "Workers", key: "w"},
 		{kind: model.EntityTemplates, label: "Templates", key: "t"},
@@ -257,7 +275,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(table, 0, 1, true)
-	root.AddItem(overviewFooter("Enter apply  r/c/v/s/w/t/i quick switch  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("Enter apply  r/c/v/k/s/w/t/i quick switch  Esc/q close"), 1, 0, false)
 	return root, table
 }
 
@@ -267,6 +285,8 @@ func entityTitle(kind model.EntityKind) string {
 		return "Source Codes"
 	case model.EntitySourceCodeVersions:
 		return "Source Code Versions"
+	case model.EntitySecrets:
+		return "Secrets"
 	case model.EntityStorages:
 		return "Storages"
 	case model.EntityWorkers:
@@ -286,9 +306,12 @@ func (a *App) currentEntityTitle() string {
 		return title
 	}
 
-	filters := make([]string, 0, 4)
+	filters := make([]string, 0, 5)
 	if a.resourceStorageFilter != nil {
 		filters = append(filters, fmt.Sprintf("storage: %s", a.resourceStorageFilter.Name))
+	}
+	if a.resourceSecretFilter != nil {
+		filters = append(filters, fmt.Sprintf("secret: %s", a.resourceSecretFilter.Name))
 	}
 	if a.resourceTemplateFilter != nil {
 		filters = append(filters, fmt.Sprintf("template: %s", a.resourceTemplateFilter.Name))
@@ -314,6 +337,8 @@ func entityEmptyLabel(kind model.EntityKind) string {
 		return "No source codes"
 	case model.EntitySourceCodeVersions:
 		return "No source code versions"
+	case model.EntitySecrets:
+		return "No secrets"
 	case model.EntityStorages:
 		return "No storages"
 	case model.EntityWorkers:

@@ -23,6 +23,8 @@ var availableCommands = []string{
 	"refresh",
 	"reset-filters",
 	"resources",
+	"secret-filter",
+	"secrets",
 	"source-codes",
 	"source-code-versions",
 	"settings",
@@ -51,6 +53,8 @@ func (a *App) runCommand(input string) {
 		a.handleNav('c')
 	case "v", "scv", "source-code-version", "source-code-versions", "source_code_version", "source_code_versions":
 		a.handleNav('v')
+	case "k", "sec", "secret", "secrets":
+		a.handleNav('k')
 	case "s", "stg", "storage", "storages":
 		a.handleNav('s')
 	case "w", "wrk", "worker", "workers":
@@ -109,6 +113,8 @@ func (a *App) runCommand(input string) {
 		a.openSourceCodeVersionFilter()
 	case "storage-filter", "sf":
 		a.openStorageFilter()
+	case "secret-filter", "kf", "secf":
+		a.openSecretFilter()
 	case "integration-filter", "if":
 		a.openIntegrationFilter()
 	case "destroyed", "hide-destroyed":
@@ -158,7 +164,7 @@ func (a *App) suggestCommand(input string) (string, []string) {
 }
 
 func (a *App) commandError(command string, message string) {
-	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :source-codes\n  :source-code-versions\n  :templates\n  :integrations\n  :storages\n  :workers\n  :refresh\n  :enable\n  :disable\n  :delete\n  :edit\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :storage-filter\n  :template-filter\n  :version-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
+	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :source-codes\n  :source-code-versions\n  :secrets\n  :templates\n  :integrations\n  :storages\n  :workers\n  :refresh\n  :enable\n  :disable\n  :delete\n  :edit\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :storage-filter\n  :secret-filter\n  :template-filter\n  :version-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
 	a.ui.OpenOverlayPrimitive("Command", view)
 }
 

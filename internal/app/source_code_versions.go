@@ -18,6 +18,7 @@ func (a *App) openSourceCodeVersionOverview(id string, name string) {
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = &entityDetailSelection{ID: id, Name: name, Kind: "source_code_versions"}
+	a.activeSecretDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil

@@ -535,6 +535,54 @@ func TestStorages(t *testing.T) {
 	}
 }
 
+func TestSecrets(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "ListSecrets"):
+			fmt.Fprint(w, `{"data":{"secrets":[{"id":"sec1","name":"redis-password","description":"Redis credentials","secretType":"tofu","secretProvider":"aws","configuration":{"name":"redis-password","aws_region":"eu-west-1"},"labels":["prod"],"state":"ready","status":"ready","resourcesCount":2,"executorsCount":1,"revisionNumber":4,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"secret","integration":{"id":"i1","name":"aws-prod","entityName":"integration","integrationProvider":"aws","integrationType":"cloud"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}],"secretsCount":1}}`)
+		case strings.Contains(req.Query, "GetSecret"):
+			fmt.Fprint(w, `{"data":{"secret":{"id":"sec1","name":"redis-password","description":"Redis credentials","secretType":"tofu","secretProvider":"custom","configuration":{"secrets":[{"name":"password","value":"hidden"}]},"labels":["prod"],"state":"ready","status":"ready","resourcesCount":2,"executorsCount":1,"revisionNumber":4,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","entityName":"secret","integration":{"id":"i1","name":"aws-prod","entityName":"integration","integrationProvider":"aws","integrationType":"cloud"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}}}`)
+		case strings.Contains(req.Query, "UpdateSecret"):
+			if req.Variables["id"] != "sec1" {
+				t.Fatalf("update secret id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateSecret":{"id":"sec1","name":"redis-password","entityName":"secret","secretProvider":"custom"}}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	secrets, err := client.Secrets(context.Background(), map[string]any{"secret_provider": "aws"}, []string{"updated_at", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("secrets query: %v", err)
+	}
+	if secrets.Total != 1 || len(secrets.Items) != 1 || secrets.Items[0].Name != "redis-password" {
+		t.Fatalf("secrets = %#v", secrets)
+	}
+
+	secret, err := client.Secret(context.Background(), "sec1")
+	if err != nil {
+		t.Fatalf("secret query: %v", err)
+	}
+	if secret == nil || secret.SecretProvider != "custom" || secret.Integration == nil || secret.Integration.Name != "aws-prod" {
+		t.Fatalf("secret = %#v", secret)
+	}
+
+	if err := client.UpdateSecret(context.Background(), "sec1", map[string]any{"description": "Updated"}); err != nil {
+		t.Fatalf("update secret: %v", err)
+	}
+}
+
 func TestWorkers(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

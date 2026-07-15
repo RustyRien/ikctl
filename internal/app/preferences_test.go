@@ -21,6 +21,7 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 			Resources: config.ResourceViewConfig{
 				Columns:                 []string{"name", "status", "age"},
 				StorageFilter:           config.FilterRef{ID: "st-1", Name: "terraform-state"},
+				SecretFilter:            config.FilterRef{ID: "sec-1", Name: "prod-aws-creds"},
 				TemplateFilter:          config.FilterRef{ID: "tpl-1", Name: "base-template"},
 				SourceCodeVersionFilter: config.FilterRef{ID: "scv-1", Name: "modules/redis:v1.2.3"},
 				IntegrationFilter:       config.FilterRef{ID: "int-1", Name: "aws"},
@@ -46,6 +47,9 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 	if a.resourceStorageFilter == nil || a.resourceStorageFilter.ID != "st-1" {
 		t.Fatalf("storage filter not applied: %#v", a.resourceStorageFilter)
 	}
+	if a.resourceSecretFilter == nil || a.resourceSecretFilter.ID != "sec-1" {
+		t.Fatalf("secret filter not applied: %#v", a.resourceSecretFilter)
+	}
 	if a.resourceTemplateFilter == nil || a.resourceTemplateFilter.ID != "tpl-1" {
 		t.Fatalf("template filter not applied: %#v", a.resourceTemplateFilter)
 	}
@@ -62,6 +66,9 @@ func TestNewWithClientAppliesSavedViewPreferences(t *testing.T) {
 	resourceFilter := a.models[model.EntityResources].Filter()
 	if resourceFilter["storage_id"] != "st-1" {
 		t.Fatalf("resource model storage filter = %#v", resourceFilter)
+	}
+	if got, ok := resourceFilter["secret_ids__any"].([]string); !ok || len(got) != 1 || got[0] != "sec-1" {
+		t.Fatalf("resource model secret filter = %#v", resourceFilter)
 	}
 	if resourceFilter["template_id"] != "tpl-1" {
 		t.Fatalf("resource model template filter = %#v", resourceFilter)

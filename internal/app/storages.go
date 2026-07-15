@@ -18,6 +18,7 @@ func (a *App) openStorageOverview(id string, name string) {
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
+	a.activeSecretDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = &entityDetailSelection{ID: id, Name: name, Kind: "storages"}
 	a.activeWorkerDetail = nil

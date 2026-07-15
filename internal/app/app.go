@@ -126,6 +126,11 @@ type App struct {
 	storageFilterTable              *tview.Table
 	storageFilterQuery              string
 	storageFilterMode               bool
+	secretFilterAllRows             []client.Secret
+	secretFilterRows                []client.Secret
+	secretFilterTable               *tview.Table
+	secretFilterQuery               string
+	secretFilterMode                bool
 	integrationFilterAllRows        []client.Integration
 	integrationFilterRows           []client.Integration
 	integrationFilterTable          *tview.Table
@@ -136,6 +141,7 @@ type App struct {
 	templateColumnsTable            *tview.Table
 	visibleTemplateColumns          map[string]bool
 	resourceStorageFilter           *client.Storage
+	resourceSecretFilter            *client.Secret
 	resourceTemplateFilter          *client.Template
 	resourceSourceCodeVersionFilter *client.SourceCodeVersion
 	resourceIntegrationFilter       *client.Integration
@@ -143,6 +149,7 @@ type App struct {
 	activeTemplateDetail            *templateDetailSelection
 	activeSourceCodeDetail          *entityDetailSelection
 	activeSourceCodeVersionDetail   *entityDetailSelection
+	activeSecretDetail              *entityDetailSelection
 	activeIntegrationDetail         *entityDetailSelection
 	activeStorageDetail             *entityDetailSelection
 	activeWorkerDetail              *entityDetailSelection
@@ -216,6 +223,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetTemplateFilterFunc(app.openTemplateFilter)
 	ui.SetSourceCodeVersionFilterFunc(app.openSourceCodeVersionFilter)
 	ui.SetStorageFilterFunc(app.openStorageFilter)
+	ui.SetSecretFilterFunc(app.openSecretFilter)
 	ui.SetIntegrationFilterFunc(app.openIntegrationFilter)
 	ui.SetResourceColumnsFunc(app.openColumns)
 	ui.SetToggleDestroyedFunc(app.toggleHideDestroyedResources)
@@ -363,6 +371,10 @@ func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string
 	case client.SourceCodeVersion:
 		return fmt.Sprintf("YAML: Source Code Version %s", valueOr(value.GetName(), value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.SourceCodeVersion(ctx, id)
+		}, true
+	case client.Secret:
+		return fmt.Sprintf("YAML: Secret %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Secret(ctx, id)
 		}, true
 	case client.Integration:
 		return fmt.Sprintf("YAML: Integration %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
@@ -757,7 +769,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.entitySelectorTable = nil
 				return false
-			case 'r', 'c', 'v', 's', 'w', 't', 'i':
+			case 'r', 'c', 'v', 'k', 's', 'w', 't', 'i':
 				a.entitySelectorTable = nil
 				a.ui.CloseOverlay()
 				a.handleNav(event.Rune())
@@ -885,6 +897,65 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				a.integrationFilterTable = nil
 				a.integrationFilterQuery = ""
 				a.integrationFilterMode = false
+				a.overviewTree = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.secretFilterTable != nil {
+		if a.secretFilterMode {
+			switch event.Key() {
+			case tcell.KeyEsc:
+				a.secretFilterMode = false
+				a.renderSecretFilterOverlay()
+				return true
+			case tcell.KeyBackspace, tcell.KeyBackspace2:
+				a.secretFilterQuery = trimLastRune(a.secretFilterQuery)
+				a.renderSecretFilterOverlay()
+				return true
+			case tcell.KeyEnter:
+				a.applySelectedSecretFilter()
+				return true
+			case tcell.KeyRune:
+				if event.Rune() != '/' {
+					a.secretFilterQuery += string(event.Rune())
+					a.renderSecretFilterOverlay()
+				}
+				return true
+			}
+		}
+
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.applySelectedSecretFilter()
+			return true
+		case tcell.KeyEsc:
+			a.secretFilterAllRows = nil
+			a.secretFilterRows = nil
+			a.secretFilterTable = nil
+			a.secretFilterQuery = ""
+			a.secretFilterMode = false
+			a.overviewTree = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '/':
+				a.secretFilterMode = true
+				a.renderSecretFilterOverlay()
+				return true
+			case 'c':
+				a.clearSecretFilter()
+				return true
+			case 'q':
+				a.secretFilterAllRows = nil
+				a.secretFilterRows = nil
+				a.secretFilterTable = nil
+				a.secretFilterQuery = ""
+				a.secretFilterMode = false
 				a.overviewTree = nil
 				return false
 			}
@@ -1620,6 +1691,8 @@ func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, 
 		return value.ID, valueOr(value.DisplayName(), value.ID), "source_code", true
 	case client.SourceCodeVersion:
 		return value.ID, valueOr(value.GetName(), value.ID), "source_code_version", true
+	case client.Secret:
+		return value.ID, value.Name, "secret", true
 	case client.Integration:
 		return value.ID, value.Name, "integration", true
 	case client.Storage:

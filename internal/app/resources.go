@@ -69,6 +69,7 @@ func (a *App) resetAllResourceFilters() {
 		return
 	}
 	a.resourceStorageFilter = nil
+	a.resourceSecretFilter = nil
 	a.resourceTemplateFilter = nil
 	a.resourceSourceCodeVersionFilter = nil
 	a.resourceIntegrationFilter = nil
@@ -196,6 +197,46 @@ func (a *App) openTemplateFilter() {
 	}(selectedTemplateID)
 }
 
+func (a *App) openSecretFilter() {
+	if a.activeKind != model.EntityResources {
+		return
+	}
+
+	selectedSecretID := ""
+	if a.resourceSecretFilter != nil {
+		selectedSecretID = a.resourceSecretFilter.ID
+	}
+	a.resetResourceFilterOverlays()
+
+	a.ui.OpenOverlay("Resource Secret Filter", "Loading secrets...")
+
+	go func(selectedID string) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		result, err := a.client.Secrets(ctx, nil, []string{"name", "ASC"}, []int{0, 200})
+		var primitive tview.Primitive
+		var secrets []client.Secret
+		var table *tview.Table
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load secrets.\n\n%v", err))
+		} else {
+			secrets = result.Items
+			primitive, table = secretFilterView(result.Items, len(result.Items), result.Total, selectedID, "", false)
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.secretFilterAllRows = secrets
+			a.secretFilterRows = secrets
+			a.secretFilterTable = table
+			a.ui.OpenOverlayPrimitive("Resource Secret Filter", primitive)
+		})
+	}(selectedSecretID)
+}
+
 func (a *App) openIntegrationFilter() {
 	if a.activeKind != model.EntityResources {
 		return
@@ -288,6 +329,19 @@ func (a *App) renderIntegrationFilterOverlay() {
 	a.ui.OpenOverlayPrimitive("Resource Integration Filter", primitive)
 }
 
+func (a *App) renderSecretFilterOverlay() {
+	selectedID := ""
+	if a.resourceSecretFilter != nil {
+		selectedID = a.resourceSecretFilter.ID
+	}
+
+	filtered := filterSecrets(a.secretFilterAllRows, a.secretFilterQuery)
+	primitive, table := secretFilterView(filtered, len(filtered), len(a.secretFilterAllRows), selectedID, a.secretFilterQuery, a.secretFilterMode)
+	a.secretFilterRows = filtered
+	a.secretFilterTable = table
+	a.ui.OpenOverlayPrimitive("Resource Secret Filter", primitive)
+}
+
 func (a *App) applySelectedTemplateFilter() {
 	if a.templateFilterTable == nil {
 		return
@@ -378,6 +432,36 @@ func (a *App) clearStorageFilter() {
 	a.applyResourceFilters()
 }
 
+func (a *App) applySelectedSecretFilter() {
+	if a.secretFilterTable == nil {
+		return
+	}
+
+	selectedRow, _ := a.secretFilterTable.GetSelection()
+	if selectedRow <= 0 {
+		return
+	}
+
+	if selectedRow == 1 {
+		a.clearSecretFilter()
+		return
+	}
+
+	index := selectedRow - 2
+	if index < 0 || index >= len(a.secretFilterRows) {
+		return
+	}
+
+	secret := a.secretFilterRows[index]
+	a.resourceSecretFilter = &secret
+	a.applyResourceFilters()
+}
+
+func (a *App) clearSecretFilter() {
+	a.resourceSecretFilter = nil
+	a.applyResourceFilters()
+}
+
 func (a *App) applySelectedIntegrationFilter() {
 	if a.integrationFilterTable == nil {
 		return
@@ -435,6 +519,11 @@ func (a *App) resetResourceFilterOverlays() {
 	a.storageFilterTable = nil
 	a.storageFilterQuery = ""
 	a.storageFilterMode = false
+	a.secretFilterAllRows = nil
+	a.secretFilterRows = nil
+	a.secretFilterTable = nil
+	a.secretFilterQuery = ""
+	a.secretFilterMode = false
 	a.templateFilterAllRows = nil
 	a.templateFilterRows = nil
 	a.templateFilterTable = nil
@@ -458,6 +547,9 @@ func (a *App) resourceFilters() map[string]any {
 	filter := map[string]any{}
 	if a.resourceStorageFilter != nil {
 		filter["storage_id"] = a.resourceStorageFilter.ID
+	}
+	if a.resourceSecretFilter != nil {
+		filter["secret_ids__any"] = []string{a.resourceSecretFilter.ID}
 	}
 	if a.resourceTemplateFilter != nil {
 		filter["template_id"] = a.resourceTemplateFilter.ID
@@ -550,6 +642,89 @@ func filterStorages(storages []client.Storage, query string) []client.Storage {
 	filtered := make([]client.Storage, 0, len(matches))
 	for _, match := range matches {
 		filtered = append(filtered, storages[match.Index])
+	}
+	return filtered
+}
+
+func secretFilterView(secrets []client.Secret, shown int, total int, selectedID string, query string, filterMode bool) (tview.Primitive, *tview.Table) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Secrets")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"SECRET", "PROVIDER", "TYPE", "UPDATED"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	selectedRow := 1
+	allLabel := "All secrets"
+	if selectedID == "" {
+		allLabel += "  [active]"
+	}
+	table.SetCell(1, 0, tview.NewTableCell(allLabel).SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 2, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+	table.SetCell(1, 3, tview.NewTableCell("-").SetTextColor(tcell.ColorLightSteelBlue).SetExpansion(1))
+
+	for rowIndex, secret := range secrets {
+		name := secret.Name
+		if secret.ID == selectedID {
+			name += "  [active]"
+			selectedRow = rowIndex + 2
+		}
+		fields := []string{
+			name,
+			blankDash(secret.SecretProvider),
+			blankDash(secret.SecretType),
+			secret.UpdatedAt.Format(time.RFC3339),
+		}
+		for col, field := range fields {
+			table.SetCell(rowIndex+2, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+
+	table.Select(selectedRow, 0)
+
+	footerText := fmt.Sprintf("Showing %d of %d secrets  / filter  Enter apply  c clear  Esc/q close", shown, total)
+	if query != "" {
+		footerText += fmt.Sprintf("  Filter: %s", query)
+	}
+	if filterMode {
+		footerText += "  typing..."
+	}
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter(footerText), 1, 0, false)
+	return root, table
+}
+
+func filterSecrets(secrets []client.Secret, query string) []client.Secret {
+	if query == "" {
+		return append([]client.Secret(nil), secrets...)
+	}
+
+	targets := make([]string, 0, len(secrets))
+	for _, secret := range secrets {
+		targets = append(targets, strings.ToLower(strings.Join([]string{
+			secret.Name,
+			secret.SecretProvider,
+			secret.SecretType,
+			secret.State,
+			secret.Status,
+		}, " ")))
+	}
+
+	matches := fuzzy.Find(strings.ToLower(query), targets)
+	filtered := make([]client.Secret, 0, len(matches))
+	for _, match := range matches {
+		filtered = append(filtered, secrets[match.Index])
 	}
 	return filtered
 }
@@ -649,6 +824,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	a.activeTemplateDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
+	a.activeSecretDetail = nil
 	a.activeIntegrationDetail = nil
 	a.activeStorageDetail = nil
 	a.activeWorkerDetail = nil
@@ -738,6 +914,22 @@ func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]fun
 						return
 					}
 					a.openIntegrationOverview(integration.ID, valueOr(integration.Name, integration.ID))
+				},
+			)
+		}
+	}
+	if len(resource.Secrets) > 0 {
+		jumpActions['k'] = func() {
+			a.openOverviewJumpSelection(
+				"Resource Secrets",
+				resourceSecretJumpOptions(resource.Secrets),
+				"No secrets available",
+				func(option overviewJumpOption) {
+					secret, ok := option.Value.(client.Secret)
+					if !ok {
+						return
+					}
+					a.openSecretOverview(secret.ID, valueOr(secret.Name, secret.ID))
 				},
 			)
 		}
@@ -1255,6 +1447,18 @@ func resourceIntegrationJumpOptions(integrations []client.Integration) []overvie
 	return options
 }
 
+func resourceSecretJumpOptions(secrets []client.Secret) []overviewJumpOption {
+	options := make([]overviewJumpOption, 0, len(secrets))
+	for _, secret := range secrets {
+		options = append(options, overviewJumpOption{
+			Label:       valueOr(secret.Name, secret.ID),
+			Description: fmt.Sprintf("%s / %s", blankDash(secret.SecretProvider), blankDash(secret.SecretType)),
+			Value:       secret,
+		})
+	}
+	return options
+}
+
 func resourceWorkspace(resource client.Resource) string {
 	if resource.Workspace == nil {
 		return "-"
@@ -1311,6 +1515,9 @@ func resourceTemplateHint(resource client.Resource) string {
 	hints = append(hints, "T tree")
 	if len(resource.Integrations) > 0 {
 		hints = append(hints, "i integrations")
+	}
+	if len(resource.Secrets) > 0 {
+		hints = append(hints, "k secrets")
 	}
 	if len(hints) == 0 {
 		return "Esc/q close"
