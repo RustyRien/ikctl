@@ -348,10 +348,17 @@ func (a *App) UpdateOverlay(title string, text string) {
 }
 
 func (a *App) OpenOverlayPrimitive(title string, primitive tview.Primitive) {
+	a.OpenOverlayPrimitiveWithFocus(title, primitive, primitive)
+}
+
+func (a *App) OpenOverlayPrimitiveWithFocus(title string, primitive tview.Primitive, focus tview.Primitive) {
+	if focus == nil {
+		focus = primitive
+	}
 	a.setOverlayContent(title, primitive)
 	a.pages.ShowPage("overlay")
 	a.updateBreadcrumbs()
-	a.app.SetFocus(primitive)
+	a.app.SetFocus(focus)
 }
 
 func (a *App) OpenDetail(title string, text string) {

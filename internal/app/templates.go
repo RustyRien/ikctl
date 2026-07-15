@@ -117,6 +117,10 @@ func (a *App) openTemplateTree(id string, name string) {
 
 		a.ui.Application().QueueUpdateDraw(func() {
 			a.overviewTree = treeSelection
+			if treeSelection != nil && treeSelection.view != nil {
+				a.ui.OpenOverlayPrimitiveWithFocus(title, primitive, treeSelection.view)
+				return
+			}
 			a.ui.OpenOverlayPrimitive(title, primitive)
 		})
 	}()
