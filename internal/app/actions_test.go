@@ -142,3 +142,31 @@ func TestColorizeYAMLSearchRegionsMatchK9sBehavior(t *testing.T) {
 		t.Fatalf("colorizeYAML search regions = %q, want %q", got, want)
 	}
 }
+
+func TestTemplateOverviewHintIncludesResourcesAndAudit(t *testing.T) {
+	hint := templateOverviewHint(client.Template{ID: "t1", Name: "aws_redis"})
+	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "t tree view"} {
+		if !strings.Contains(hint, want) {
+			t.Fatalf("template overview hint missing %q in %q", want, hint)
+		}
+	}
+}
+
+func TestTemplateResourceJumpOptions(t *testing.T) {
+	options := templateResourceJumpOptions([]client.Resource{{ID: "r1", Name: "redis-prod", State: "provisioned", Status: "ready"}})
+	if len(options) != 1 {
+		t.Fatalf("options len = %d", len(options))
+	}
+	if options[0].Label != "redis-prod" || options[0].Description != "ready" {
+		t.Fatalf("option = %#v", options[0])
+	}
+}
+
+func TestIntegrationOverviewHintIncludesResourcesAndAudit(t *testing.T) {
+	hint := integrationOverviewHint(client.Integration{ID: "i1", Name: "aws-prod"})
+	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources"} {
+		if !strings.Contains(hint, want) {
+			t.Fatalf("integration overview hint missing %q in %q", want, hint)
+		}
+	}
+}

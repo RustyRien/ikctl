@@ -10,6 +10,7 @@ import (
 	"github.com/electrolux-oss/ik-tui/internal/model"
 	"github.com/electrolux-oss/ik-tui/internal/render"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -63,21 +64,76 @@ func (a *App) openTemplateOverview(id string, name string) {
 
 		full, err := a.client.Template(ctx, id)
 		var primitive tview.Primitive
+		var jumpActions map[rune]func()
 		if err != nil {
 			primitive = errorView(fmt.Sprintf("Failed to load template overview.\n\n%v", err))
 		} else if full != nil {
 			a.activeTemplateDetail = &templateDetailSelection{ID: full.ID, Name: full.Name}
 			primitive = templateOverviewView(*full)
+			jumpActions = a.templateOverviewJumpActions(*full)
 		} else {
 			a.activeTemplateDetail = nil
 			primitive = errorView("Template not found")
 		}
 
 		a.ui.Application().QueueUpdateDraw(func() {
+			a.clearOverviewJumpState()
+			for key, action := range jumpActions {
+				a.setOverviewJumpAction(key, action)
+			}
 			a.ui.OpenDetailPrimitive(title, primitive)
 			a.ui.SetTemplateOverviewHotkeys()
 		})
 	}()
+}
+
+func (a *App) templateOverviewJumpActions(template client.Template) map[rune]func() {
+	if template.ID == "" {
+		return nil
+	}
+	return map[rune]func(){
+		'r': func() {
+			a.openTemplateResources(template)
+		},
+	}
+}
+
+func (a *App) openTemplateResources(template client.Template) {
+	title := fmt.Sprintf("Template Resources: %s", valueOr(template.Name, template.ID))
+	a.overviewJumpSelector = nil
+	a.ui.OpenOverlay(title, "Loading template resources...")
+
+	go func(template client.Template) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		result, err := a.client.Resources(ctx, map[string]any{"template_id": template.ID}, []string{"updated_at", "DESC"}, []int{0, 200})
+		var primitive tview.Primitive
+		var selector *overviewJumpSelector
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to load template resources.\n\n%v", err))
+		} else if len(result.Items) == 0 {
+			primitive = errorView("No resources found for this template")
+		} else {
+			options := templateResourceJumpOptions(result.Items)
+			primitive, selector = templateResourceSelectionView(options, len(result.Items), result.Total)
+			selector.onSelect = func(option overviewJumpOption) {
+				resourceItem, ok := option.Value.(client.Resource)
+				if !ok {
+					return
+				}
+				a.openResourceOverview(client.Resource{ID: resourceItem.ID, Name: resourceItem.Name})
+			}
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.overviewJumpSelector = selector
+			a.ui.OpenOverlayPrimitive(title, primitive)
+		})
+	}(template)
 }
 
 func (a *App) openTemplateTree(id string, name string) {
@@ -237,9 +293,21 @@ func templateOverviewView(template client.Template) tview.Primitive {
 	summary := kvTable("Summary", [][2]string{
 		{"Name", template.Name},
 		{"ID", template.ID},
+		{"Status", blankDash(template.Status)},
 		{"Created", template.CreatedAt.Format(time.RFC3339)},
 		{"Updated", template.UpdatedAt.Format(time.RFC3339)},
+		{"Revision", fmt.Sprintf("%d", template.RevisionNumber)},
+		{"Abstract", fmt.Sprintf("%t", template.Abstract)},
+		{"Creator", templateCreator(template)},
+	})
+
+	meta := kvTable("Catalog / Usage", [][2]string{
 		{"Cloud Types", strings.Join(orSlice(template.CloudResourceTypes, []string{"-"}), ", ")},
+		{"Labels", strings.Join(orSlice(template.Labels, []string{"-"}), ", ")},
+		{"Resources", fmt.Sprintf("%d", template.ResourcesCount)},
+		{"SC Versions", fmt.Sprintf("%d", template.SourceCodeVersionsCount)},
+		{"Entity", blankDash(template.EntityName)},
+		{"Documentation", valueOr(template.Documentation, "-")},
 	})
 
 	description := tview.NewTextView()
@@ -248,9 +316,139 @@ func templateOverviewView(template client.Template) tview.Primitive {
 	description.SetWrap(true)
 	description.SetText(valueOr(template.Description, "-"))
 
+	relations := simpleList("Relations", append(
+		prefixedTemplateRefs("Parent", template.Parents),
+		prefixedTemplateRefs("Child", template.Children)...,
+	))
+
+	configuration := mapDetailsTable("Configuration", template.Configuration)
+	templateBody := templateTextView("Template", valueOr(strings.TrimSpace(template.Template), "-"), false)
+
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
-	root.AddItem(summary, 7, 0, true)
-	root.AddItem(description, 0, 1, false)
-	root.AddItem(overviewFooter("y yaml  t tree view  Esc/q close"), 1, 0, false)
+	root.AddItem(tview.NewFlex().
+		AddItem(summary, 0, 1, false).
+		AddItem(meta, 0, 1, false), 10, 0, true)
+	root.AddItem(tview.NewFlex().
+		AddItem(description, 0, 2, false).
+		AddItem(relations, 0, 1, false), 8, 0, false)
+	root.AddItem(tview.NewFlex().
+		AddItem(configuration, 0, 1, false).
+		AddItem(templateBody, 0, 2, false), 0, 1, false)
+	root.AddItem(overviewFooter(templateOverviewHint(template)), 1, 0, false)
 	return root
+}
+
+func templateOverviewHint(template client.Template) string {
+	hints := []string{"y yaml", "l logs", "a audit", "r resources", "t tree view", "Esc/q close"}
+	if template.ID == "" {
+		hints = []string{"y yaml", "l logs", "a audit", "Esc/q close"}
+	}
+	return strings.Join(hints, "  ")
+}
+
+func templateCreator(template client.Template) string {
+	if template.Creator == nil {
+		return "-"
+	}
+	if template.Creator.Email != "" {
+		return fmt.Sprintf("%s <%s>", displayCreator(*template.Creator), template.Creator.Email)
+	}
+	return displayCreator(*template.Creator)
+}
+
+func prefixedTemplateRefs(prefix string, refs []client.TemplateReference) []string {
+	lines := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		parts := make([]string, 0, 2)
+		if ref.Abstract {
+			parts = append(parts, "abstract")
+		}
+		if len(ref.CloudResourceTypes) > 0 {
+			parts = append(parts, strings.Join(ref.CloudResourceTypes, ", "))
+		}
+		details := "-"
+		if len(parts) > 0 {
+			details = strings.Join(parts, " / ")
+		}
+		lines = append(lines, fmt.Sprintf("%s: %s [%s]", prefix, valueOr(ref.Name, ref.ID), details))
+	}
+	return lines
+}
+
+func mapDetailsTable(title string, values map[string]any) tview.Primitive {
+	table := tview.NewTable().SetBorders(false)
+	table.SetBorder(true)
+	table.SetTitle(title)
+	if len(values) == 0 {
+		table.SetCell(0, 0, tview.NewTableCell("-").SetSelectable(false))
+		return table
+	}
+	keys := sortedKeys([]map[string]any{values})
+	for row, key := range keys {
+		table.SetCell(row, 0, tview.NewTableCell(strings.ToUpper(key)).SetTextColor(tcell.ColorSteelBlue).SetSelectable(false))
+		table.SetCell(row, 1, tview.NewTableCell(stringify(values[key])).SetSelectable(false).SetExpansion(1))
+	}
+	return table
+}
+
+func templateTextView(title string, text string, wrap bool) tview.Primitive {
+	view := tview.NewTextView()
+	view.SetBorder(true)
+	view.SetTitle(title)
+	view.SetWrap(wrap)
+	view.SetWordWrap(wrap)
+	view.SetText(text)
+	return view
+}
+
+func templateResourceJumpOptions(resources []client.Resource) []overviewJumpOption {
+	options := make([]overviewJumpOption, 0, len(resources))
+	for _, resourceItem := range resources {
+		options = append(options, overviewJumpOption{
+			Label:       valueOr(resourceItem.Name, resourceItem.ID),
+			Description: blankDash(resourceItem.Status),
+			Value:       resourceItem,
+		})
+	}
+	return options
+}
+
+func templateResourceSelectionView(options []overviewJumpOption, shown int, total int) (tview.Primitive, *overviewJumpSelector) {
+	table := tview.NewTable().SetSelectable(true, false).SetFixed(1, 0)
+	table.SetBorder(true)
+	table.SetTitle("Resources")
+	table.SetBackgroundColor(tcell.ColorBlack)
+	table.SetBorderColor(tcell.ColorCadetBlue)
+
+	headers := []string{"RESOURCE", "STATE", "STATUS", "UPDATED"}
+	for col, header := range headers {
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorCadetBlue).
+			SetSelectable(false).
+			SetExpansion(1))
+	}
+
+	for rowIndex, option := range options {
+		resourceItem, _ := option.Value.(client.Resource)
+		fields := []string{
+			blankDash(option.Label),
+			blankDash(resourceItem.State),
+			blankDash(resourceItem.Status),
+			resourceItem.UpdatedAt.Format(time.RFC3339),
+		}
+		for col, field := range fields {
+			table.SetCell(rowIndex+1, col, tview.NewTableCell(field).
+				SetTextColor(tcell.ColorLightSteelBlue).
+				SetExpansion(1))
+		}
+	}
+	if len(options) > 0 {
+		table.Select(1, 0)
+	}
+
+	footer := fmt.Sprintf("Showing %d of %d resources  Enter open  Esc/q close", shown, total)
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(table, 0, 1, true)
+	root.AddItem(overviewFooter(footer), 1, 0, false)
+	return root, &overviewJumpSelector{options: options, table: table}
 }

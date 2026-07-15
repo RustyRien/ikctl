@@ -699,6 +699,12 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 					return nil
 				}
 			}
+			if event.Rune() == 'a' && a.auditFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.auditFn(row)
+					return nil
+				}
+			}
 			if event.Rune() == 'y' && a.yamlFn != nil {
 				a.yamlFn()
 				return nil

@@ -220,6 +220,18 @@ func TestTemplateAndTree(t *testing.T) {
 		switch {
 		case strings.Contains(req.Query, "GetTemplate"):
 			fmt.Fprint(w, `{"data":{"template":{"id":"t1","name":"aws_redis","description":"Redis template","documentation":"https://example.invalid/docs","template":"resource \"aws_elasticache_cluster\" \"this\" {}","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","cloudResourceTypes":["redis"],"labels":["cache","prod"],"status":"ready","abstract":false,"configuration":{"tier":"backend"},"revisionNumber":3,"resourcesCount":7,"sourceCodeVersionsCount":2,"entityName":"template","creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"},"parents":[{"id":"tp1","name":"base_template","abstract":true,"cloudResourceTypes":["network"],"entityName":"template"}],"children":[{"id":"tc1","name":"redis_replica","abstract":false,"cloudResourceTypes":["redis"],"entityName":"template"}]}}}`)
+		case strings.Contains(req.Query, "ListResources"):
+			filter, _ := req.Variables["filter"].(map[string]any)
+			if templateID := filter["template_id"]; templateID != "t1" {
+				t.Fatalf("template resource filter = %#v", templateID)
+			}
+			fmt.Fprint(w, `{"data":{"resources":[{"id":"r1","name":"redis-prod","state":"provisioned","status":"ready","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","labels":["prod"],"template":{"id":"t1","name":"aws_redis","cloudResourceTypes":["redis"]},"workspace":{"id":"w1","name":"platform"},"storage":{"id":"st1","name":"terraform-state"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"},"integrationIds":[],"secretIds":[],"revisionNumber":2,"storagePath":"ik/state/redis-prod.tfstate","sourceCodeVersion":{"id":"scv1","identifier":"modules/redis:v1.2.3","sourceCodeFolder":"modules/redis","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","status":"ready"},"parents":[],"children":[],"variables":[],"outputs":[],"dependencyTags":[],"dependencyConfig":[]}],"resourcesCount":1}}`)
+		case strings.Contains(req.Query, "ListAuditLogs"):
+			filter, _ := req.Variables["filter"].(map[string]any)
+			if entityID := filter["entity_id"]; entityID != "t1" {
+				t.Fatalf("audit entity_id filter = %#v", entityID)
+			}
+			fmt.Fprint(w, `{"data":{"auditLogs":[{"id":"a1","model":"template","userId":"u1","action":"apply","entityId":"t1","createdAt":"2026-01-02T00:00:00Z","revisionNumber":3,"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}]}}`)
 		case strings.Contains(req.Query, "TemplateTree"):
 			if req.Variables["id"] != "t1" {
 				t.Fatalf("template tree id = %#v", req.Variables["id"])
@@ -255,6 +267,22 @@ func TestTemplateAndTree(t *testing.T) {
 		t.Fatalf("template details = %#v", template)
 	}
 
+	resources, err := client.Resources(context.Background(), map[string]any{"template_id": "t1"}, []string{"updated_at", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("template resources query: %v", err)
+	}
+	if resources.Total != 1 || len(resources.Items) != 1 || resources.Items[0].Name != "redis-prod" {
+		t.Fatalf("template resources = %#v", resources)
+	}
+
+	auditLogs, err := client.AuditLogsForEntity(context.Background(), "t1", []int{0, 50})
+	if err != nil {
+		t.Fatalf("template audit logs query: %v", err)
+	}
+	if len(auditLogs) != 1 || auditLogs[0].Model != "template" || auditLogs[0].EntityID != "t1" {
+		t.Fatalf("template auditLogs = %#v", auditLogs)
+	}
+
 	tree, err := client.TemplateTree(context.Background(), "t1", "children")
 	if err != nil {
 		t.Fatalf("template tree query: %v", err)
@@ -284,6 +312,19 @@ func TestIntegrationActions(t *testing.T) {
 		switch {
 		case strings.Contains(req.Query, "GetIntegration"):
 			fmt.Fprint(w, `{"data":{"integration":{"id":"i1","name":"aws-prod","description":"AWS","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","integrationProvider":"aws","integrationType":"cloud"}}}`)
+		case strings.Contains(req.Query, "ListResources"):
+			filter, _ := req.Variables["filter"].(map[string]any)
+			got, _ := filter["integration_ids__any"].([]any)
+			if len(got) != 1 || got[0] != "i1" {
+				t.Fatalf("integration resource filter = %#v", filter["integration_ids__any"])
+			}
+			fmt.Fprint(w, `{"data":{"resources":[{"id":"r1","name":"redis-prod","state":"provisioned","status":"ready","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","labels":["prod"],"template":{"id":"t1","name":"aws_redis","cloudResourceTypes":["redis"]},"workspace":{"id":"w1","name":"platform"},"storage":{"id":"st1","name":"terraform-state"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"},"integrationIds":[{"id":"i1","name":"aws-prod","integrationProvider":"aws","integrationType":"cloud"}],"secretIds":[],"revisionNumber":2,"storagePath":"ik/state/redis-prod.tfstate","sourceCodeVersion":{"id":"scv1","identifier":"modules/redis:v1.2.3","sourceCodeFolder":"modules/redis","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","status":"ready"},"parents":[],"children":[],"variables":[],"outputs":[],"dependencyTags":[],"dependencyConfig":[]}],"resourcesCount":1}}`)
+		case strings.Contains(req.Query, "ListAuditLogs"):
+			filter, _ := req.Variables["filter"].(map[string]any)
+			if entityID := filter["entity_id"]; entityID != "i1" {
+				t.Fatalf("integration audit entity_id filter = %#v", entityID)
+			}
+			fmt.Fprint(w, `{"data":{"auditLogs":[{"id":"a1","model":"integration","userId":"u1","action":"sync","entityId":"i1","createdAt":"2026-01-02T00:00:00Z","revisionNumber":1,"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}]}}`)
 		case strings.Contains(req.Query, "IntegrationAction"):
 			input, _ := req.Variables["input"].(map[string]any)
 			action := input["action"]
@@ -306,6 +347,22 @@ func TestIntegrationActions(t *testing.T) {
 	defer server.Close()
 
 	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	resources, err := client.Resources(context.Background(), map[string]any{"integration_ids__any": []string{"i1"}}, []string{"updated_at", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("integration resources query: %v", err)
+	}
+	if resources.Total != 1 || len(resources.Items) != 1 || resources.Items[0].Name != "redis-prod" {
+		t.Fatalf("integration resources = %#v", resources)
+	}
+
+	auditLogs, err := client.AuditLogsForEntity(context.Background(), "i1", []int{0, 50})
+	if err != nil {
+		t.Fatalf("integration audit logs query: %v", err)
+	}
+	if len(auditLogs) != 1 || auditLogs[0].Model != "integration" || auditLogs[0].EntityID != "i1" {
+		t.Fatalf("integration auditLogs = %#v", auditLogs)
+	}
 
 	if err := client.EnableIntegration(context.Background(), "i1"); err != nil {
 		t.Fatalf("enable integration: %v", err)

@@ -76,17 +76,19 @@ var resourceOverviewHints = headerHints{
 var templateOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-		{{key: "y", label: "yaml"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
-		{{key: "t", label: "tree view"}, {key: "esc", label: "back"}, {key: "q", label: "back"}},
+		{{key: "r", label: "resources"}, {key: "t", label: "tree view"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }
 
 var integrationOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-		{{key: "y", label: "yaml"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
+		{{key: "r", label: "resources"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }
