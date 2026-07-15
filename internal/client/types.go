@@ -253,6 +253,10 @@ type deleteTemplateMutationData struct {
 	DeleteTemplate bool `json:"deleteTemplate"`
 }
 
+type deleteResourceMutationData struct {
+	DeleteResource bool `json:"deleteResource"`
+}
+
 type updateResourceMutationData struct {
 	UpdateResource *entityActionResult `json:"updateResource"`
 }

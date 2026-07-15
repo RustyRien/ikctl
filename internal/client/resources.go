@@ -274,6 +274,10 @@ const resourceActionMutation = `mutation ResourceAction($id: UUID!, $input: Reso
   }
 }`
 
+const deleteResourceMutation = `mutation DeleteResource($id: UUID!) {
+  deleteResource(id: $id)
+}`
+
 const updateTemplateMutation = `mutation UpdateTemplate($id: UUID!, $input: TemplateUpdateInput!) {
   updateTemplate(id: $id, input: $input) {
     id
@@ -441,6 +445,26 @@ func (c *Client) ApproveResource(ctx context.Context, id string) error {
 
 func (c *Client) RejectResource(ctx context.Context, id string) error {
 	return c.resourceAction(ctx, id, "reject")
+}
+
+func (c *Client) ResourceAction(ctx context.Context, id string, action string) error {
+	return c.resourceAction(ctx, id, action)
+}
+
+func (c *Client) DeleteResource(ctx context.Context, id string) error {
+	resp, err := query[deleteResourceMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: deleteResourceMutation,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.DeleteResource {
+		return errors.New("resource delete failed")
+	}
+	return nil
 }
 
 func (c *Client) UpdateTemplate(ctx context.Context, id string, input map[string]any) error {

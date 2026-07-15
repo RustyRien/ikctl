@@ -149,10 +149,15 @@ func TestResourceAndLogs(t *testing.T) {
 		case strings.Contains(req.Query, "ResourceAction"):
 			input, _ := req.Variables["input"].(map[string]any)
 			action := input["action"]
-			if action != "approve" && action != "reject" {
+			if action != "approve" && action != "reject" && action != "execute" && action != "disable" {
 				t.Fatalf("resource action = %#v", action)
 			}
 			fmt.Fprintf(w, `{"data":{"resourceAction":{"id":"r1","entityName":"resource","status":"%s"}}}`, action)
+		case strings.Contains(req.Query, "DeleteResource"):
+			if req.Variables["id"] != "r1" {
+				t.Fatalf("delete resource id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"deleteResource":true}}`)
 		case strings.Contains(req.Query, "ListLogs"):
 			filter, _ := req.Variables["filter"].(map[string]any)
 			if auditLogID, ok := filter["audit_log_id"]; ok {
@@ -244,6 +249,12 @@ func TestResourceAndLogs(t *testing.T) {
 	}
 	if err := client.RejectResource(context.Background(), "r1"); err != nil {
 		t.Fatalf("reject resource: %v", err)
+	}
+	if err := client.ResourceAction(context.Background(), "r1", "execute"); err != nil {
+		t.Fatalf("resource action execute: %v", err)
+	}
+	if err := client.DeleteResource(context.Background(), "r1"); err != nil {
+		t.Fatalf("delete resource: %v", err)
 	}
 }
 

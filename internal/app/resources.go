@@ -923,6 +923,12 @@ func resourceTemplateTypes(resource client.Resource) []string {
 func resourceTemplateHint(resource client.Resource) string {
 	hints := make([]string, 0, 5)
 	hints = append(hints, "y yaml")
+	if len(resourceMenuActions(resource.Actions)) > 0 {
+		hints = append(hints, "A actions")
+	}
+	if hasAction(resource.Actions, "delete") {
+		hints = append(hints, "D delete")
+	}
 	hints = append(hints, "E edit")
 	if resourceNeedsReview(resource) {
 		hints = append(hints, "R review")

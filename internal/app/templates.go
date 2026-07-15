@@ -339,9 +339,9 @@ func templateOverviewView(template client.Template) tview.Primitive {
 }
 
 func templateOverviewHint(template client.Template) string {
-	hints := []string{"y yaml", "l logs", "a audit", "r resources", "t tree view", "E edit", "Esc/q close"}
+	hints := []string{"y yaml", "A actions", "l logs", "a audit", "r resources", "t tree view", "E edit", "Esc/q close"}
 	if template.ID == "" {
-		hints = []string{"y yaml", "l logs", "a audit", "E edit", "Esc/q close"}
+		hints = []string{"y yaml", "A actions", "l logs", "a audit", "E edit", "Esc/q close"}
 	}
 	return strings.Join(hints, "  ")
 }

@@ -61,7 +61,7 @@ type entityActionPrompt struct {
 	Kind   string
 	ID     string
 	Name   string
-	Action func(context.Context) error
+	Action func(context.Context) (string, error)
 }
 
 type resourceReviewState struct {
@@ -191,6 +191,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	ui.SetEnableFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "enable") })
 	ui.SetDisableFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "disable") })
 	ui.SetDeleteFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "delete") })
+	ui.SetActionMenuFunc(app.openEntityActionMenu)
 	ui.SetEditFunc(app.openEntityEditor)
 	ui.SetReviewFunc(app.openResourceReview)
 	ui.SetNavFunc(app.handleNav)

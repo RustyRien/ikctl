@@ -10,7 +10,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-func TestEntityActionPromptForRowSupportsTemplatesAndIntegrations(t *testing.T) {
+func TestEntityActionPromptForRowSupportsEntities(t *testing.T) {
 	a := &App{client: &client.Client{}}
 
 	templatePrompt, ok := a.entityActionPromptForRow(tabledata.Row{Raw: client.Template{ID: "t1", Name: "tpl"}}, "enable")
@@ -30,7 +30,10 @@ func TestEntityActionPromptForRowSupportsTemplatesAndIntegrations(t *testing.T) 
 	}
 
 	resourcePrompt, ok := a.entityActionPromptForRow(tabledata.Row{Raw: client.Resource{ID: "r1", Name: "res"}}, "disable")
-	if ok || resourcePrompt != nil {
+	if !ok || resourcePrompt == nil {
+		t.Fatal("expected resource disable prompt")
+	}
+	if resourcePrompt.Kind != "resource" || resourcePrompt.Verb != "disable" || resourcePrompt.ID != "r1" {
 		t.Fatalf("unexpected resource action prompt: %#v", resourcePrompt)
 	}
 }
@@ -56,6 +59,9 @@ func TestActionPromptFactoriesReturnAction(t *testing.T) {
 		{name: "integration enable", mk: func() (*entityActionPrompt, bool) {
 			return a.integrationActionPrompt(client.Integration{ID: "i1", Name: "aws"}, "enable")
 		}},
+		{name: "resource execute", mk: func() (*entityActionPrompt, bool) {
+			return a.resourceActionPrompt(client.Resource{ID: "r1", Name: "redis"}, "execute")
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			prompt, ok := tc.mk()
@@ -71,6 +77,52 @@ func TestActionPromptFactoriesReturnAction(t *testing.T) {
 	}
 
 	_ = context.Background()
+}
+
+func TestResourceMenuActionsFiltersAndSorts(t *testing.T) {
+	got := resourceMenuActions([]string{" delete ", "has_temporary_state", "retry", "edit", "execute"})
+	want := []string{"execute", "retry", "delete"}
+	if len(got) != len(want) {
+		t.Fatalf("len(actions) = %d want %d (%#v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("actions[%d] = %q want %q (%#v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestEntityMenuActionsFiltersEditForTemplatesAndIntegrations(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind string
+		in   []string
+		want []string
+	}{
+		{name: "template", kind: "template", in: []string{"enable", "edit", "delete"}, want: []string{"enable", "delete"}},
+		{name: "integration", kind: "integration", in: []string{"disable", "edit", "delete"}, want: []string{"disable", "delete"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := entityMenuActions(tc.kind, tc.in)
+			if len(got) != len(tc.want) {
+				t.Fatalf("len(actions) = %d want %d (%#v)", len(got), len(tc.want), got)
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Fatalf("actions[%d] = %q want %q (%#v)", i, got[i], tc.want[i], got)
+				}
+			}
+		})
+	}
+}
+
+func TestResourceActionDescriptionUsesFrontendStyleMappings(t *testing.T) {
+	if got := resourceActionDescription("cascade_destroy"); !strings.Contains(got, "cascade destroy workflow") {
+		t.Fatalf("description = %q", got)
+	}
+	if got := resourceActionDescription("unknown_action"); got != "Send this resource action request." {
+		t.Fatalf("fallback description = %q", got)
+	}
 }
 
 func TestYAMLDetailForRowSupportsEntities(t *testing.T) {
@@ -146,7 +198,7 @@ func TestColorizeYAMLSearchRegionsMatchK9sBehavior(t *testing.T) {
 
 func TestTemplateOverviewHintIncludesResourcesAndAudit(t *testing.T) {
 	hint := templateOverviewHint(client.Template{ID: "t1", Name: "aws_redis"})
-	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "t tree view", "E edit"} {
+	for _, want := range []string{"y yaml", "A actions", "l logs", "a audit", "r resources", "t tree view", "E edit"} {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("template overview hint missing %q in %q", want, hint)
 		}
@@ -165,7 +217,7 @@ func TestTemplateResourceJumpOptions(t *testing.T) {
 
 func TestIntegrationOverviewHintIncludesResourcesAndAudit(t *testing.T) {
 	hint := integrationOverviewHint(client.Integration{ID: "i1", Name: "aws-prod"})
-	for _, want := range []string{"y yaml", "l logs", "a audit", "r resources", "E edit"} {
+	for _, want := range []string{"y yaml", "A actions", "l logs", "a audit", "r resources", "E edit"} {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("integration overview hint missing %q in %q", want, hint)
 		}
@@ -178,6 +230,20 @@ func TestResourceTemplateHintIncludesEdit(t *testing.T) {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("resource hint missing %q in %q", want, hint)
 		}
+	}
+}
+
+func TestResourceTemplateHintIncludesDeleteWhenAvailable(t *testing.T) {
+	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Actions: []string{"delete"}})
+	if !strings.Contains(hint, "D delete") {
+		t.Fatalf("resource hint missing delete in %q", hint)
+	}
+}
+
+func TestResourceTemplateHintIncludesActionsWhenAvailable(t *testing.T) {
+	hint := resourceTemplateHint(client.Resource{ID: "r1", Name: "redis", Actions: []string{"execute"}})
+	if !strings.Contains(hint, "A actions") {
+		t.Fatalf("resource hint missing actions in %q", hint)
 	}
 }
 

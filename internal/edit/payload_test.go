@@ -39,6 +39,7 @@ dependency_tags:
 
 func TestTemplateInputFromYAML(t *testing.T) {
 	input, err := TemplateInputFromYAML([]byte(`name: tpl
+template: resource {}
 cloud_resource_types:
   - redis
 parents:
@@ -57,6 +58,9 @@ configuration:
 	parents, _ := input["parents"].([]string)
 	if len(parents) != 1 || parents[0] != "p1" {
 		t.Fatalf("parents = %#v", input["parents"])
+	}
+	if _, ok := input["template"]; ok {
+		t.Fatalf("template should not be included in update input: %#v", input)
 	}
 }
 
@@ -143,7 +147,6 @@ func TestTemplateYAMLIncludesOnlyEditableFields(t *testing.T) {
 		"name: aws_redis",
 		"description: Redis template",
 		"documentation: https://docs",
-		"template: resource {}",
 		"parents:",
 		"- p1",
 		"children:",
@@ -156,7 +159,7 @@ func TestTemplateYAMLIncludesOnlyEditableFields(t *testing.T) {
 			t.Fatalf("expected YAML to contain %q, got:\n%s", want, text)
 		}
 	}
-	for _, unwanted := range []string{"\nstatus:", "\ncreated_at:", "\nupdated_at:", "\nentity_name:", "\nrevision_number:", "\nid:"} {
+	for _, unwanted := range []string{"\ntemplate:", "\nstatus:", "\ncreated_at:", "\nupdated_at:", "\nentity_name:", "\nrevision_number:", "\nid:"} {
 		if strings.Contains(text, unwanted) {
 			t.Fatalf("did not expect YAML to contain %q, got:\n%s", unwanted, text)
 		}

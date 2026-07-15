@@ -42,6 +42,7 @@ type App struct {
 	enableFn            func(tabledata.Row)
 	disableFn           func(tabledata.Row)
 	deleteFn            func(tabledata.Row)
+	actionMenuFn        func(tabledata.Row)
 	editFn              func(tabledata.Row)
 	reviewFn            func(tabledata.Row)
 	navFn               func(rune)
@@ -250,6 +251,10 @@ func (a *App) SetDisableFunc(fn func(tabledata.Row)) {
 
 func (a *App) SetDeleteFunc(fn func(tabledata.Row)) {
 	a.deleteFn = fn
+}
+
+func (a *App) SetActionMenuFunc(fn func(tabledata.Row)) {
+	a.actionMenuFn = fn
 }
 
 func (a *App) SetEditFunc(fn func(tabledata.Row)) {
@@ -701,21 +706,15 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 					return nil
 				}
 			}
-			if event.Rune() == 'x' && a.disableFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
-					a.disableFn(row)
-					return nil
-				}
-			}
-			if event.Rune() == 'X' && a.enableFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
-					a.enableFn(row)
-					return nil
-				}
-			}
 			if event.Rune() == 'D' && a.deleteFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
 					a.deleteFn(row)
+					return nil
+				}
+			}
+			if event.Rune() == 'A' && a.actionMenuFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.actionMenuFn(row)
 					return nil
 				}
 			}
@@ -842,24 +841,17 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				}
 			}
 			return nil
-		case 'x':
-			if a.disableFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
-					a.disableFn(row)
-				}
-			}
-			return nil
-		case 'X':
-			if a.enableFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
-					a.enableFn(row)
-				}
-			}
-			return nil
 		case 'D':
 			if a.deleteFn != nil {
 				if row, ok := a.table.SelectedRow(); ok {
 					a.deleteFn(row)
+				}
+			}
+			return nil
+		case 'A':
+			if a.actionMenuFn != nil {
+				if row, ok := a.table.SelectedRow(); ok {
+					a.actionMenuFn(row)
 				}
 			}
 			return nil

@@ -136,15 +136,14 @@ Auth notes:
 - `/`: enter filter mode, `Enter` to apply, `Esc` to cancel
 - `Enter`: open selected resource overview
 - `l`: open selected resource logs
-- `x`: disable selected template/integration
-- `X`: enable selected template/integration
-- `D`: delete selected template/integration
+- `A`: open the actions dialog for the selected entity; use it for enable/disable and other permission-based actions
+- `D`: delete selected template/integration/resource when supported
 - `E`: edit selected resource/template/integration in your editor
 - `Esc`, `q`: close detail view
 - `s`: enter sort mode, press a highlighted column number, then `a` for ascending or `d` for descending to fetch sorted results from the backend, `Esc` to cancel
 - `e`: choose entity (`r` resources, `t` templates, `i` integrations)
 
-Command mode also supports `:enable`, `:disable`, `:delete`, and `:edit` for the currently selected entity.
+Command mode also supports `:enable`, `:disable`, `:delete`, and `:edit` for the currently selected entity, but the TUI hotkey flow for enable/disable now goes through `A` actions.
 
 The main list shows `Shown / Total` in the status bar and loads more rows from the backend automatically as you scroll near the bottom.
 
