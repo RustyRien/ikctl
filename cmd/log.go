@@ -58,8 +58,8 @@ func runLog(cmd *cobra.Command, entity string, nameOrID string, sinceValue strin
 	if !ok {
 		return fmt.Errorf("unknown entity %q (valid: %s)", entity, strings.Join(registry.Names(), ", "))
 	}
-	if descriptor.Name != "resources" {
-		return fmt.Errorf("live log streaming is currently supported only for resources")
+	if descriptor.Name != "resources" && descriptor.Name != "executors" {
+		return fmt.Errorf("live log streaming is currently supported only for resources and executors")
 	}
 
 	since, err := parseSince(sinceValue, time.Now())
@@ -81,17 +81,17 @@ func runLog(cmd *cobra.Command, entity string, nameOrID string, sinceValue strin
 		}
 	}
 
-	resourceItem, ok := raw.(client.Resource)
-	if !ok {
-		return fmt.Errorf("unexpected resource payload type %T", raw)
+	entityID, entityDisplayName, singular, err := logEntityMeta(descriptor.Singular, raw)
+	if err != nil {
+		return err
 	}
 
-	if _, err := fmt.Fprintln(os.Stderr, logStartMessage(resourceItem, since, follow)); err != nil {
+	if _, err := fmt.Fprintln(os.Stderr, logStartMessage(singular, entityDisplayName, entityID, since, follow)); err != nil {
 		return err
 	}
 
 	historyCtx, historyCancel := context.WithTimeout(ctx, 20*time.Second)
-	historyLogs, _, err := cli.LogsForEntity(historyCtx, resourceItem.ID, []int{0, initialLogHistoryLimit})
+	historyLogs, _, err := cli.LogsForEntity(historyCtx, entityID, []int{0, initialLogHistoryLimit})
 	historyCancel()
 	if err != nil {
 		return err
@@ -109,7 +109,7 @@ func runLog(cmd *cobra.Command, entity string, nameOrID string, sinceValue strin
 		return nil
 	}
 
-	return cli.StreamLogs(ctx, descriptor.Singular, resourceItem.ID, func(message client.LogStreamMessage) error {
+	return cli.StreamLogs(ctx, descriptor.Singular, entityID, func(message client.LogStreamMessage) error {
 		if deduper.ShouldSuppress(message) {
 			return nil
 		}
@@ -227,12 +227,23 @@ func filterLogsSince(logs []client.Log, since *time.Time) []client.Log {
 	return filtered
 }
 
-func logStartMessage(resourceItem client.Resource, since *time.Time, follow bool) string {
+func logEntityMeta(singular string, raw any) (entityID string, displayName string, entityLabel string, err error) {
+	switch value := raw.(type) {
+	case client.Resource:
+		return value.ID, value.Name, singular, nil
+	case client.Executor:
+		return value.ID, value.Name, singular, nil
+	default:
+		return "", "", "", fmt.Errorf("unexpected %s payload type %T", singular, raw)
+	}
+}
+
+func logStartMessage(entityLabel string, entityName string, entityID string, since *time.Time, follow bool) string {
 	action := "Showing recent logs"
 	if since != nil {
 		action = fmt.Sprintf("Showing logs since %s", since.Format(time.RFC3339))
 	}
-	message := fmt.Sprintf("%s for resource %s (%s).", action, resourceItem.Name, resourceItem.ID)
+	message := fmt.Sprintf("%s for %s %s (%s).", action, entityLabel, entityName, entityID)
 	if !follow {
 		return message
 	}

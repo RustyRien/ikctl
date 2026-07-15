@@ -89,6 +89,7 @@ const (
 	detailHotkeysAudit
 	detailHotkeysAuditDetail
 	detailHotkeysResourceOverview
+	detailHotkeysExecutorOverview
 	detailHotkeysTemplateOverview
 	detailHotkeysSourceCodeOverview
 	detailHotkeysSourceCodeVersionOverview
@@ -468,6 +469,12 @@ func (a *App) SetResourceOverviewHotkeys() {
 	a.filterMenuMode = false
 	a.header.SetResourceOverviewHotkeys()
 	a.updateDetailHotkeys(detailHotkeysResourceOverview)
+}
+
+func (a *App) SetExecutorOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetExecutorOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysExecutorOverview)
 }
 
 func (a *App) SetTemplateOverviewHotkeys() {
@@ -1129,6 +1136,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetAuditDetailHotkeys()
 	case detailHotkeysResourceOverview:
 		a.header.SetResourceOverviewHotkeys()
+	case detailHotkeysExecutorOverview:
+		a.header.SetExecutorOverviewHotkeys()
 	case detailHotkeysTemplateOverview:
 		a.header.SetTemplateOverviewHotkeys()
 	case detailHotkeysSourceCodeOverview:

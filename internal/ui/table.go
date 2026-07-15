@@ -205,7 +205,7 @@ func (t *Table) EntityMode() bool {
 }
 
 func (t *Table) EntityHints() string {
-	return "r:Resources  c:SourceCodes  v:SourceCodeVersions  k:Secrets  s:Storages  W:Workers  t:Templates  w:Workspaces  i:Integrations"
+	return "r:Resources  x:Executors  c:SourceCodes  v:SourceCodeVersions  k:Secrets  s:Storages  W:Workers  t:Templates  w:Workspaces  i:Integrations"
 }
 
 func (t *Table) EntityForKey(key rune) (rune, bool) {
@@ -213,7 +213,7 @@ func (t *Table) EntityForKey(key rune) (rune, bool) {
 		return 0, false
 	}
 	switch key {
-	case 'r', 'c', 'v', 'k', 's', 't', 'i', 'w', 'W':
+	case 'r', 'x', 'c', 'v', 'k', 's', 't', 'i', 'w', 'W':
 		return key, true
 	default:
 		return 0, false

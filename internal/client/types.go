@@ -39,6 +39,35 @@ func (r Resource) GetName() string {
 	return r.Name
 }
 
+type Executor struct {
+	ID                string        `json:"id"`
+	Name              string        `json:"name"`
+	Description       string        `json:"description"`
+	Runtime           string        `json:"runtime"`
+	CommandArgs       string        `json:"commandArgs"`
+	SourceCode        *SourceCode   `json:"sourceCode"`
+	SourceCodeVersion string        `json:"sourceCodeVersion"`
+	SourceCodeBranch  string        `json:"sourceCodeBranch"`
+	SourceCodeFolder  string        `json:"sourceCodeFolder"`
+	Integrations      []Integration `json:"integrationIds"`
+	Secrets           []Secret      `json:"secretIds"`
+	Storage           *Storage      `json:"storage"`
+	StoragePath       string        `json:"storagePath"`
+	Labels            []string      `json:"labels"`
+	State             string        `json:"state"`
+	Status            string        `json:"status"`
+	RevisionNumber    int           `json:"revisionNumber"`
+	Creator           *Creator      `json:"creator"`
+	CreatedAt         time.Time     `json:"createdAt"`
+	UpdatedAt         time.Time     `json:"updatedAt"`
+	IsFavorite        bool          `json:"isFavorite"`
+	EntityName        string        `json:"entityName"`
+}
+
+func (e Executor) GetName() string {
+	return e.Name
+}
+
 type Template struct {
 	ID                      string              `json:"id"`
 	Name                    string              `json:"name"`
@@ -344,6 +373,19 @@ type templateQueryData struct {
 	Template *Template `json:"template"`
 }
 
+type executorsQueryData struct {
+	Executors      []Executor `json:"executors"`
+	ExecutorsCount int        `json:"executorsCount"`
+}
+
+type executorQueryData struct {
+	Executor *Executor `json:"executor"`
+}
+
+type executorActionsQueryData struct {
+	ExecutorActions []string `json:"executorActions"`
+}
+
 type secretsQueryData struct {
 	Secrets      []Secret `json:"secrets"`
 	SecretsCount int      `json:"secretsCount"`
@@ -464,12 +506,24 @@ type deleteResourceMutationData struct {
 	DeleteResource bool `json:"deleteResource"`
 }
 
+type deleteExecutorMutationData struct {
+	DeleteExecutor bool `json:"deleteExecutor"`
+}
+
 type updateResourceMutationData struct {
 	UpdateResource *entityActionResult `json:"updateResource"`
 }
 
+type updateExecutorMutationData struct {
+	UpdateExecutor *entityActionResult `json:"updateExecutor"`
+}
+
 type resourceActionMutationData struct {
 	ResourceAction *entityActionResult `json:"resourceAction"`
+}
+
+type executorActionMutationData struct {
+	ExecutorAction *entityActionResult `json:"executorAction"`
 }
 
 type updateTemplateMutationData struct {
@@ -606,6 +660,11 @@ func (t *FlexibleTime) UnmarshalJSON(data []byte) error {
 
 type ResourcesResult struct {
 	Items []Resource
+	Total int
+}
+
+type ExecutorsResult struct {
+	Items []Executor
 	Total int
 }
 

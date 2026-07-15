@@ -78,6 +78,17 @@ var resourceOverviewHints = headerHints{
 	},
 }
 
+var executorOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "A", label: "actions"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
+		{{key: "c", label: "source code"}, {key: "s", label: "storage"}, {key: "i", label: "integrations"}},
+		{{key: "k", label: "secrets"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
 var templateOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
@@ -236,6 +247,10 @@ func (h *Header) SetDetailHotkeys() {
 
 func (h *Header) SetResourceOverviewHotkeys() {
 	h.SetHotkeys(resourceOverviewHints)
+}
+
+func (h *Header) SetExecutorOverviewHotkeys() {
+	h.SetHotkeys(executorOverviewHints)
 }
 
 func (h *Header) SetTemplateOverviewHotkeys() {

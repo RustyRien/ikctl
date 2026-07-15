@@ -17,6 +17,7 @@ type EntityKind string
 
 const (
 	EntityResources          EntityKind = "resources"
+	EntityExecutors          EntityKind = "executors"
 	EntitySourceCodes        EntityKind = "source_codes"
 	EntitySourceCodeVersions EntityKind = "source_code_versions"
 	EntitySecrets            EntityKind = "secrets"

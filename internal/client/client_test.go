@@ -550,6 +550,115 @@ func TestWorkspaceGetName(t *testing.T) {
 	}
 }
 
+func TestExecutors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var req graphqlRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch {
+		case strings.Contains(req.Query, "ListLogs"):
+			filter, _ := req.Variables["filter"].(map[string]any)
+			if entityID := filter["entity_id"]; entityID != "e1" {
+				t.Fatalf("executor logs entity_id filter = %#v", entityID)
+			}
+			if executionStart, ok := filter["execution_start"]; ok {
+				if executionStart != float64(456) {
+					t.Fatalf("executor logs execution_start filter = %#v", executionStart)
+				}
+				fmt.Fprint(w, `{"data":{"logs":[{"id":"l2","entityId":"e1","entity":"executor","revision":1,"auditLogId":"ae1","level":"INFO","data":"executor apply started","createdAt":"2026-01-02T00:00:01Z","executionStart":456,"expireAt":"2026-01-03T00:00:00Z","traceId":"trace-e1"}],"logsCount":1}}`)
+				return
+			}
+			fmt.Fprint(w, `{"data":{"logs":[{"id":"l1","entityId":"e1","entity":"executor","revision":1,"auditLogId":"ae1","level":"INFO","data":"executor apply started","createdAt":"2026-01-02T00:00:01Z","executionStart":456,"expireAt":"2026-01-03T00:00:00Z","traceId":"trace-e1"}],"logsCount":1}}`)
+		case strings.Contains(req.Query, "ListAuditLogs"):
+			filter, _ := req.Variables["filter"].(map[string]any)
+			if entityID := filter["entity_id"]; entityID != "e1" {
+				t.Fatalf("executor audit entity_id filter = %#v", entityID)
+			}
+			fmt.Fprint(w, `{"data":{"auditLogs":[{"id":"ae1","model":"executor","userId":"u1","action":"apply","entityId":"e1","createdAt":"2026-01-02T00:00:00Z","revisionNumber":7,"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}]}}`)
+		case strings.Contains(req.Query, "ListExecutors"):
+			fmt.Fprint(w, `{"data":{"executors":[{"id":"e1","name":"runner-prod","description":"Executor for prod","runtime":"tofu","commandArgs":"-var-file=prod.tfvars","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","sourceCodeFolder":"services/prod","storagePath":"service-catalog/executor/runner-prod/terraform.tfstate","labels":["prod"],"state":"ready","status":"ready","revisionNumber":7,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","isFavorite":true,"entityName":"executor","sourceCode":{"id":"sc1","identifier":"infra-modules","sourceCodeUrl":"https://github.com/acme/infra-modules.git","entityName":"source_code"},"integrationIds":[{"id":"i1","name":"aws-prod","entityName":"integration","integrationProvider":"aws","integrationType":"cloud"}],"secretIds":[{"id":"sec1","name":"redis-password","entityName":"secret"}],"storage":{"id":"st1","name":"terraform-state","entityName":"storage","storageProvider":"aws","storageType":"tofu"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}],"executorsCount":1}}`)
+		case strings.Contains(req.Query, "GetExecutor"):
+			fmt.Fprint(w, `{"data":{"executor":{"id":"e1","name":"runner-prod","description":"Executor for prod","runtime":"tofu","commandArgs":"-var-file=prod.tfvars","sourceCodeVersion":"v1.2.3","sourceCodeBranch":"","sourceCodeFolder":"services/prod","storagePath":"service-catalog/executor/runner-prod/terraform.tfstate","labels":["prod"],"state":"ready","status":"ready","revisionNumber":7,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","isFavorite":true,"entityName":"executor","sourceCode":{"id":"sc1","identifier":"infra-modules","sourceCodeUrl":"https://github.com/acme/infra-modules.git","sourceCodeProvider":"github","sourceCodeLanguage":"tofu","entityName":"source_code"},"integrationIds":[{"id":"i1","name":"aws-prod","entityName":"integration","integrationProvider":"aws","integrationType":"cloud"}],"secretIds":[{"id":"sec1","name":"redis-password","entityName":"secret","secretProvider":"aws","secretType":"tofu"}],"storage":{"id":"st1","name":"terraform-state","entityName":"storage","storageProvider":"aws","storageType":"tofu"},"creator":{"id":"u1","identifier":"alice","email":"alice@example.com","displayName":"Alice"}}}}`)
+		case strings.Contains(req.Query, "ExecutorActions"):
+			fmt.Fprint(w, `{"data":{"executorActions":["dryrun","enable","disable","delete"]}}`)
+		case strings.Contains(req.Query, "UpdateExecutor"):
+			if req.Variables["id"] != "e1" {
+				t.Fatalf("update executor id = %#v", req.Variables["id"])
+			}
+			fmt.Fprint(w, `{"data":{"updateExecutor":{"id":"e1","name":"runner-prod","entityName":"executor"}}}`)
+		case strings.Contains(req.Query, "ExecutorAction"):
+			fmt.Fprint(w, `{"data":{"executorAction":{"id":"e1","entityName":"executor","status":"ready"}}}`)
+		case strings.Contains(req.Query, "DeleteExecutor"):
+			fmt.Fprint(w, `{"data":{"deleteExecutor":true}}`)
+		default:
+			t.Fatalf("unexpected query: %s", req.Query)
+		}
+	}))
+	defer server.Close()
+
+	client := New(config.Config{Endpoint: server.URL, Token: "token-123"})
+
+	executors, err := client.Executors(context.Background(), map[string]any{"name__like": "runner"}, []string{"updated_at", "DESC"}, []int{0, 50})
+	if err != nil {
+		t.Fatalf("executors query: %v", err)
+	}
+	if executors.Total != 1 || len(executors.Items) != 1 || executors.Items[0].Name != "runner-prod" {
+		t.Fatalf("executors = %#v", executors)
+	}
+
+	executor, err := client.Executor(context.Background(), "e1")
+	if err != nil {
+		t.Fatalf("executor query: %v", err)
+	}
+	if executor == nil || executor.Runtime != "tofu" || executor.SourceCode == nil || executor.SourceCode.Identifier != "infra-modules" {
+		t.Fatalf("executor = %#v", executor)
+	}
+
+	logs, total, err := client.LogsForExecutor(context.Background(), "e1", []int{0, 50})
+	if err != nil {
+		t.Fatalf("executor logs query: %v", err)
+	}
+	if total != 1 || len(logs) != 1 || logs[0].Data != "executor apply started" {
+		t.Fatalf("executor logs = %#v total=%d", logs, total)
+	}
+
+	auditLogs, err := client.AuditLogsForExecutor(context.Background(), "e1", []int{0, 50})
+	if err != nil {
+		t.Fatalf("executor audit logs query: %v", err)
+	}
+	if len(auditLogs) != 1 || auditLogs[0].Action != "apply" {
+		t.Fatalf("executor audit logs = %#v", auditLogs)
+	}
+
+	actions, err := client.ExecutorActions(context.Background(), "e1")
+	if err != nil {
+		t.Fatalf("executor actions query: %v", err)
+	}
+	if len(actions) != 4 || actions[0] != "dryrun" {
+		t.Fatalf("executor actions = %#v", actions)
+	}
+
+	if err := client.UpdateExecutor(context.Background(), "e1", map[string]any{"description": "Updated"}); err != nil {
+		t.Fatalf("update executor: %v", err)
+	}
+	if err := client.DryRunExecutor(context.Background(), "e1"); err != nil {
+		t.Fatalf("dryrun executor: %v", err)
+	}
+	if err := client.EnableExecutor(context.Background(), "e1"); err != nil {
+		t.Fatalf("enable executor: %v", err)
+	}
+	if err := client.DisableExecutor(context.Background(), "e1"); err != nil {
+		t.Fatalf("disable executor: %v", err)
+	}
+	if err := client.DeleteExecutor(context.Background(), "e1"); err != nil {
+		t.Fatalf("delete executor: %v", err)
+	}
+}
+
 func TestStorages(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

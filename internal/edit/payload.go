@@ -34,6 +34,29 @@ func ResourceInputFromYAML(data []byte) (map[string]any, error) {
 	return input, nil
 }
 
+func ExecutorInputFromYAML(data []byte) (map[string]any, error) {
+	decoded, err := ParseYAMLMap(data)
+	if err != nil {
+		return nil, err
+	}
+	input := map[string]any{}
+	copyOptional(input, decoded,
+		fieldPair{"description", "description"},
+		fieldPair{"commandArgs", "command_args"},
+		fieldPair{"runtime", "runtime"},
+		fieldPair{"sourceCodeVersion", "source_code_version"},
+		fieldPair{"sourceCodeBranch", "source_code_branch"},
+		fieldPair{"sourceCodeFolder", "source_code_folder"},
+		fieldPair{"storagePath", "storage_path"},
+		fieldPair{"labels", "labels"},
+	)
+	copyNilableID(input, decoded, "sourceCodeId", "source_code_id", "sourceCode", "source_code")
+	copyNilableID(input, decoded, "storageId", "storage_id", "storage", "storage")
+	copyIDSlice(input, decoded, "integrationIds", "integration_ids")
+	copyIDSlice(input, decoded, "secretIds", "secret_ids")
+	return input, nil
+}
+
 func TemplateInputFromYAML(data []byte) (map[string]any, error) {
 	decoded, err := ParseYAMLMap(data)
 	if err != nil {
@@ -149,6 +172,28 @@ func ResourceYAML(raw any) ([]byte, error) {
 		return nil, fmt.Errorf("expected resource, got %T", raw)
 	}
 	return YAMLBytes(ResourceEditableState(value))
+}
+
+func ExecutorYAML(raw any) ([]byte, error) {
+	value, ok := raw.(client.Executor)
+	if !ok {
+		return nil, fmt.Errorf("expected executor, got %T", raw)
+	}
+	return YAMLBytes(map[string]any{
+		"name":                value.Name,
+		"description":         value.Description,
+		"runtime":             value.Runtime,
+		"command_args":        nilIfEmpty(value.CommandArgs),
+		"source_code_id":      optionalSourceCodeID(value.SourceCode),
+		"source_code_version": nilIfEmpty(value.SourceCodeVersion),
+		"source_code_branch":  nilIfEmpty(value.SourceCodeBranch),
+		"source_code_folder":  nilIfEmpty(value.SourceCodeFolder),
+		"integration_ids":     integrationIDs(value.Integrations),
+		"secret_ids":          secretIDs(value.Secrets),
+		"storage_id":          optionalStorageID(value.Storage),
+		"storage_path":        nilIfEmpty(value.StoragePath),
+		"labels":              value.Labels,
+	})
 }
 
 func ResourceEditableState(value client.Resource) map[string]any {
@@ -272,6 +317,13 @@ func optionalStorageID(value *client.Storage) any {
 }
 
 func optionalSourceCodeVersionID(value *client.SourceCodeVersion) any {
+	if value == nil || value.ID == "" {
+		return nil
+	}
+	return value.ID
+}
+
+func optionalSourceCodeID(value *client.SourceCode) any {
 	if value == nil || value.ID == "" {
 		return nil
 	}

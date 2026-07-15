@@ -19,6 +19,7 @@ func (a *App) openWorkerOverview(id string, name string) {
 	title := fmt.Sprintf("Worker: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
 	a.activeSecretDetail = nil

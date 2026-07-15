@@ -104,6 +104,8 @@ func (a *App) editSessionForRow(row tabledata.Row) (editcore.Session, error) {
 	switch value := row.Raw.(type) {
 	case client.Resource:
 		kind, id, name = "resource", value.ID, value.Name
+	case client.Executor:
+		kind, id, name = "executor", value.ID, value.Name
 	case client.Template:
 		kind, id, name = "template", value.ID, value.Name
 	case client.Workspace:
@@ -135,6 +137,8 @@ func (a *App) reopenEditedDetail(session editcore.Session) {
 	switch session.Kind {
 	case "resource":
 		a.openResourceOverview(client.Resource{ID: session.ID, Name: session.Name})
+	case "executor":
+		a.openExecutorOverview(session.ID, session.Name)
 	case "template":
 		a.openTemplateOverview(session.ID, session.Name)
 	case "workspace":

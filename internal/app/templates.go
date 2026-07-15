@@ -50,6 +50,7 @@ func (a *App) openTemplateOverview(id string, name string) {
 	title := fmt.Sprintf("Template: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = &templateDetailSelection{ID: id, Name: name}
+	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
 	a.activeSecretDetail = nil

@@ -107,14 +107,31 @@ func TestFilterLogsSince(t *testing.T) {
 func TestLogStartMessage(t *testing.T) {
 	resourceItem := client.Resource{ID: "r1", Name: "redis-prod"}
 
-	message := logStartMessage(resourceItem, nil, false)
+	message := logStartMessage("resource", resourceItem.Name, resourceItem.ID, nil, false)
 	if message != "Showing recent logs for resource redis-prod (r1)." {
 		t.Fatalf("message = %q", message)
 	}
 
 	since := time.Date(2026, 7, 2, 10, 30, 0, 0, time.UTC)
-	message = logStartMessage(resourceItem, &since, true)
+	message = logStartMessage("resource", resourceItem.Name, resourceItem.ID, &since, true)
 	if message != "Showing logs since 2026-07-02T10:30:00Z for resource redis-prod (r1). Following live output until Ctrl-C." {
 		t.Fatalf("message = %q", message)
+	}
+}
+
+func TestLogStartMessageExecutor(t *testing.T) {
+	message := logStartMessage("executor", "terraform-runner", "e1", nil, true)
+	if message != "Showing recent logs for executor terraform-runner (e1). Following live output until Ctrl-C." {
+		t.Fatalf("message = %q", message)
+	}
+}
+
+func TestLogEntityMeta(t *testing.T) {
+	entityID, name, label, err := logEntityMeta("executor", client.Executor{ID: "e1", Name: "terraform-runner"})
+	if err != nil {
+		t.Fatalf("logEntityMeta returned error: %v", err)
+	}
+	if entityID != "e1" || name != "terraform-runner" || label != "executor" {
+		t.Fatalf("unexpected meta = %q %q %q", entityID, name, label)
 	}
 }

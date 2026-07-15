@@ -46,6 +46,7 @@ func (a *App) openWorkspaceOverview(id string, name string) {
 	title := fmt.Sprintf("Workspace: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
 	a.activeSecretDetail = nil

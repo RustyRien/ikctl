@@ -46,6 +46,12 @@ var resourceActionPriority = map[string]int{
 
 var entityActionDescriptions = map[string]map[string]string{
 	"resource": resourceActionDescriptions,
+	"executor": {
+		"dryrun":  "Create an execution plan for the executor without applying changes.",
+		"enable":  "Enable the executor.",
+		"disable": "Disable the executor.",
+		"delete":  "Delete the executor record.",
+	},
 	"template": {
 		"enable":  "Enable the template.",
 		"disable": "Disable the template.",
@@ -77,6 +83,7 @@ var entityActionDescriptions = map[string]map[string]string{
 
 var entityActionPriority = map[string]map[string]int{
 	"resource":            resourceActionPriority,
+	"executor":            {"dryrun": 10, "enable": 20, "disable": 30, "delete": 40},
 	"template":            {"enable": 10, "disable": 20, "delete": 30},
 	"source_code":         {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
 	"source_code_version": {"enable": 10, "disable": 20, "sync": 30, "delete": 40},
@@ -88,6 +95,7 @@ var entityActionPriority = map[string]map[string]int{
 
 var entityActionKindLabel = map[string]string{
 	"resource":            "resource",
+	"executor":            "executor",
 	"template":            "template",
 	"source_code":         "source code",
 	"source_code_version": "source code version",
@@ -129,6 +137,8 @@ func (a *App) entityActionPromptForRow(row tabledata.Row, verb string) (*entityA
 	switch value := row.Raw.(type) {
 	case client.Template:
 		return a.templateActionPrompt(value, verb)
+	case client.Executor:
+		return a.executorActionPrompt(value, verb)
 	case client.SourceCode:
 		return a.sourceCodeActionPrompt(value, verb)
 	case client.SourceCodeVersion:
@@ -159,6 +169,12 @@ func (a *App) openEntityActionMenu(row tabledata.Row) {
 			return full.Actions, err
 		}, func(action string) (*entityActionPrompt, bool) {
 			return a.resourceActionPrompt(value, action)
+		})
+	case client.Executor:
+		a.openTypedEntityActionMenu("executor", value.ID, value.Name, func(ctx context.Context, id string) ([]string, error) {
+			return a.client.ExecutorActions(ctx, id)
+		}, func(action string) (*entityActionPrompt, bool) {
+			return a.executorActionPrompt(value, action)
 		})
 	case client.Template:
 		a.openTypedEntityActionMenu("template", value.ID, value.Name, func(context.Context, string) ([]string, error) {
@@ -328,6 +344,23 @@ func (a *App) resourceActionPrompt(value client.Resource, verb string) (*entityA
 		}
 	}
 	return &entityActionPrompt{Verb: verb, Kind: "resource", ID: value.ID, Name: value.Name, Action: action}, true
+}
+
+func (a *App) executorActionPrompt(value client.Executor, verb string) (*entityActionPrompt, bool) {
+	var action func(context.Context) (string, error)
+	switch verb {
+	case "enable":
+		action = func(ctx context.Context) (string, error) { return "updated", a.client.EnableExecutor(ctx, value.ID) }
+	case "dryrun":
+		action = func(ctx context.Context) (string, error) { return "dryrun", a.client.DryRunExecutor(ctx, value.ID) }
+	case "disable":
+		action = func(ctx context.Context) (string, error) { return "updated", a.client.DisableExecutor(ctx, value.ID) }
+	case "delete":
+		action = func(ctx context.Context) (string, error) { return "deleted", a.client.DeleteExecutor(ctx, value.ID) }
+	default:
+		return nil, false
+	}
+	return &entityActionPrompt{Verb: verb, Kind: "executor", ID: value.ID, Name: value.Name, Action: action}, true
 }
 
 func (a *App) templateActionPrompt(value client.Template, verb string) (*entityActionPrompt, bool) {

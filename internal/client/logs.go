@@ -73,8 +73,16 @@ func (c *Client) LogsForResource(ctx context.Context, resourceID string, pageRan
 	return c.LogsForEntity(ctx, resourceID, pageRange)
 }
 
+func (c *Client) LogsForExecutor(ctx context.Context, executorID string, pageRange []int) ([]Log, int, error) {
+	return c.LogsForEntity(ctx, executorID, pageRange)
+}
+
 func (c *Client) AuditLogsForResource(ctx context.Context, resourceID string, pageRange []int) ([]AuditLog, error) {
 	return c.AuditLogsForEntity(ctx, resourceID, pageRange)
+}
+
+func (c *Client) AuditLogsForExecutor(ctx context.Context, executorID string, pageRange []int) ([]AuditLog, error) {
+	return c.AuditLogsForEntity(ctx, executorID, pageRange)
 }
 
 func (c *Client) LogsForAudit(ctx context.Context, resourceID string, auditLogID string, executionStart int, pageRange []int) ([]Log, int, error) {

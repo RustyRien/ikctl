@@ -17,6 +17,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 	title := fmt.Sprintf("Integration: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
 	a.activeSecretDetail = nil

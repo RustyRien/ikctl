@@ -18,6 +18,7 @@ func (a *App) openSecretOverview(id string, name string) {
 	title := fmt.Sprintf("Secret: %s", name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
 	a.activeSecretDetail = &entityDetailSelection{ID: id, Name: name, Kind: "secrets"}

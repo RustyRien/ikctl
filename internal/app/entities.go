@@ -18,6 +18,8 @@ func (a *App) openOverview(row tabledata.Row) {
 	switch value := row.Raw.(type) {
 	case client.Resource:
 		a.openResourceOverview(value)
+	case client.Executor:
+		a.openExecutorOverview(value.ID, value.Name)
 	case client.SourceCode:
 		a.openSourceCodeOverview(value.ID, valueOr(value.DisplayName(), value.ID))
 	case client.SourceCodeVersion:
@@ -44,6 +46,8 @@ func (a *App) handleNav(key rune) {
 	switch key {
 	case 'r':
 		next = model.EntityResources
+	case 'x':
+		next = model.EntityExecutors
 	case 'c':
 		next = model.EntitySourceCodes
 	case 'v':
@@ -110,6 +114,7 @@ func (a *App) handleNav(key rune) {
 	a.templateColumnsTable = nil
 	a.workspaceColumnsTable = nil
 	a.activeTemplateDetail = nil
+	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
 	a.activeSecretDetail = nil
@@ -235,20 +240,22 @@ func (a *App) applySelectedEntity() {
 	case 1:
 		key = 'r'
 	case 2:
-		key = 'c'
+		key = 'x'
 	case 3:
-		key = 'v'
+		key = 'c'
 	case 4:
-		key = 'k'
+		key = 'v'
 	case 5:
-		key = 's'
+		key = 'k'
 	case 6:
-		key = 'W'
+		key = 's'
 	case 7:
-		key = 't'
+		key = 'W'
 	case 8:
-		key = 'w'
+		key = 't'
 	case 9:
+		key = 'w'
+	case 10:
 		key = 'i'
 	default:
 		return
@@ -280,6 +287,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 		key   string
 	}{
 		{kind: model.EntityResources, label: "Resources", key: "r"},
+		{kind: model.EntityExecutors, label: "Executors", key: "x"},
 		{kind: model.EntitySourceCodes, label: "Source Codes", key: "c"},
 		{kind: model.EntitySourceCodeVersions, label: "Source Code Versions", key: "v"},
 		{kind: model.EntitySecrets, label: "Secrets", key: "k"},
@@ -309,12 +317,14 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(table, 0, 1, true)
-	root.AddItem(overviewFooter("Enter apply  r/c/v/k/s/W/t/w/i quick switch  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("Enter apply  r/x/c/v/k/s/W/t/w/i quick switch  Esc/q close"), 1, 0, false)
 	return root, table
 }
 
 func entityTitle(kind model.EntityKind) string {
 	switch kind {
+	case model.EntityExecutors:
+		return "Executors"
 	case model.EntitySourceCodes:
 		return "Source Codes"
 	case model.EntitySourceCodeVersions:
@@ -369,6 +379,8 @@ func (a *App) currentEntityTitle() string {
 
 func entityEmptyLabel(kind model.EntityKind) string {
 	switch kind {
+	case model.EntityExecutors:
+		return "No executors"
 	case model.EntitySourceCodes:
 		return "No source codes"
 	case model.EntitySourceCodeVersions:

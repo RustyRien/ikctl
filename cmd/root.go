@@ -36,6 +36,7 @@ func init() {
 	rootCmd.AddCommand(logoutCmd())
 	rootCmd.AddCommand(enableCmd())
 	rootCmd.AddCommand(disableCmd())
+	rootCmd.AddCommand(dryrunCmd())
 	rootCmd.AddCommand(deleteCmd())
 
 	rootCmd.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "Path to config file")

@@ -17,6 +17,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 	title := fmt.Sprintf("Source Code: %s", valueOr(name, id))
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = &entityDetailSelection{ID: id, Name: name, Kind: "source_codes"}
 	a.activeSourceCodeVersionDetail = nil
 	a.activeSecretDetail = nil
@@ -40,6 +41,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 		var primitive tview.Primitive
 		var jumpActions map[rune]func()
 		if err != nil {
+			a.activeExecutorDetail = nil
 			a.activeSourceCodeDetail = nil
 			a.activeWorkerDetail = nil
 			a.activeWorkspaceDetail = nil
@@ -49,6 +51,7 @@ func (a *App) openSourceCodeOverview(id string, name string) {
 			primitive = sourceCodeOverviewView(*full)
 			jumpActions = a.sourceCodeOverviewJumpActions(*full)
 		} else {
+			a.activeExecutorDetail = nil
 			a.activeSourceCodeDetail = nil
 			a.activeSourceCodeVersionDetail = nil
 			a.activeSecretDetail = nil

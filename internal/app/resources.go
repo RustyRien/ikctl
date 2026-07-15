@@ -997,6 +997,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 	title := fmt.Sprintf("Resource: %s", resource.Name)
 	a.clearOverviewJumpState()
 	a.activeTemplateDetail = nil
+	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
 	a.activeSecretDetail = nil
@@ -1056,7 +1057,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 			a.ui.OpenDetailPrimitive(title, primitive)
 			a.ui.SetResourceOverviewHotkeys()
 			if lastLogView != nil && full != nil {
-				a.streamResourceLogsIntoView(session, full.ID, lastLogView, 20, formatRecentLogs, "Failed to load recent logs.")
+				a.streamEntityLogsIntoView(session, full.ID, full.EntityName, lastLogView, 20, formatRecentLogs, "Failed to load recent logs.")
 			}
 		})
 	}(session)

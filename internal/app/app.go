@@ -71,6 +71,7 @@ type detailStateSnapshot struct {
 	AuditLogTable                 *tview.Table
 	OverviewTree                  *overviewTreeSelection
 	ActiveTemplateDetail          *templateDetailSelection
+	ActiveExecutorDetail          *entityDetailSelection
 	ActiveSourceCodeDetail        *entityDetailSelection
 	ActiveSourceCodeVersionDetail *entityDetailSelection
 	ActiveSecretDetail            *entityDetailSelection
@@ -171,6 +172,7 @@ type App struct {
 	resourceIntegrationFilter       *client.Integration
 	hideDestroyedResources          bool
 	activeTemplateDetail            *templateDetailSelection
+	activeExecutorDetail            *entityDetailSelection
 	activeSourceCodeDetail          *entityDetailSelection
 	activeSourceCodeVersionDetail   *entityDetailSelection
 	activeSecretDetail              *entityDetailSelection
@@ -275,6 +277,7 @@ func (a *App) captureDetailState() *detailStateSnapshot {
 		AuditLogTable:                 a.auditLogTable,
 		OverviewTree:                  a.overviewTree,
 		ActiveTemplateDetail:          a.activeTemplateDetail,
+		ActiveExecutorDetail:          a.activeExecutorDetail,
 		ActiveSourceCodeDetail:        a.activeSourceCodeDetail,
 		ActiveSourceCodeVersionDetail: a.activeSourceCodeVersionDetail,
 		ActiveSecretDetail:            a.activeSecretDetail,
@@ -313,6 +316,7 @@ func (a *App) restoreDetailState(state any) {
 	a.auditLogTable = snapshot.AuditLogTable
 	a.overviewTree = snapshot.OverviewTree
 	a.activeTemplateDetail = snapshot.ActiveTemplateDetail
+	a.activeExecutorDetail = snapshot.ActiveExecutorDetail
 	a.activeSourceCodeDetail = snapshot.ActiveSourceCodeDetail
 	a.activeSourceCodeVersionDetail = snapshot.ActiveSourceCodeVersionDetail
 	a.activeSecretDetail = snapshot.ActiveSecretDetail
@@ -449,6 +453,10 @@ func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string
 	case client.Resource:
 		return fmt.Sprintf("YAML: Resource %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.Resource(ctx, id)
+		}, true
+	case client.Executor:
+		return fmt.Sprintf("YAML: Executor %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Executor(ctx, id)
 		}, true
 	case client.Template:
 		return fmt.Sprintf("YAML: Template %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
@@ -876,7 +884,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.entitySelectorTable = nil
 				return false
-			case 'r', 'c', 'v', 'k', 's', 'w', 't', 'i':
+			case 'r', 'x', 'c', 'v', 'k', 's', 'w', 't', 'i':
 				a.entitySelectorTable = nil
 				a.ui.CloseOverlay()
 				a.handleNav(event.Rune())
@@ -1436,6 +1444,10 @@ func (a *App) openLogs(row tabledata.Row) {
 		a.openResourceLogs(title, resourceItem)
 		return
 	}
+	if executorItem, ok := row.Raw.(client.Executor); ok {
+		a.openExecutorLogs(title, executorItem)
+		return
+	}
 	a.ui.OpenDetail(title, fmt.Sprintf("Loading %s logs...", strings.ToLower(entityLabel)))
 	a.ui.SetDetailHotkeys()
 
@@ -1467,7 +1479,16 @@ func (a *App) openResourceLogs(title string, resourceItem client.Resource) {
 	textView.SetText("Loading resource logs...")
 	a.ui.OpenDetailPrimitive(title, textView)
 	a.ui.SetDetailHotkeys()
-	a.streamResourceLogsIntoView(session, resourceItem.ID, textView, 200, formatStreamingLogs, "Failed to load resource logs.")
+	a.streamEntityLogsIntoView(session, resourceItem.ID, resourceItem.EntityName, textView, 200, formatStreamingLogs, "Failed to load resource logs.")
+}
+
+func (a *App) openExecutorLogs(title string, executorItem client.Executor) {
+	session := a.nextLiveLogSession()
+	textView := newStreamingLogTextView()
+	textView.SetText("Loading executor logs...")
+	a.ui.OpenDetailPrimitive(title, textView)
+	a.ui.SetDetailHotkeys()
+	a.streamEntityLogsIntoView(session, executorItem.ID, executorItem.EntityName, textView, 200, formatStreamingLogs, "Failed to load executor logs.")
 }
 
 func (a *App) openAuditLogs(row tabledata.Row) {
@@ -1661,15 +1682,15 @@ func newStreamingLogTextView() *tview.TextView {
 	return view
 }
 
-func (a *App) streamResourceLogsIntoView(session int, resourceID string, textView *tview.TextView, historyLimit int, formatter logHistoryFormatter, errorPrefix string) {
-	go func(session int, resourceID string) {
+func (a *App) streamEntityLogsIntoView(session int, entityID string, entityName string, textView *tview.TextView, historyLimit int, formatter logHistoryFormatter, errorPrefix string) {
+	go func(session int, entityID string, entityName string) {
 		done := a.ui.BeginLoading()
 		defer done()
 
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 		defer cancel()
 
-		logs, total, err := a.client.LogsForEntity(ctx, resourceID, []int{0, historyLimit})
+		logs, total, err := a.client.LogsForEntity(ctx, entityID, []int{0, historyLimit})
 		if !a.isLiveLogSessionCurrent(session) {
 			return
 		}
@@ -1697,7 +1718,7 @@ func (a *App) streamResourceLogsIntoView(session int, resourceID string, textVie
 			return
 		}
 
-		err = a.client.StreamLogs(streamCtx, "resource", resourceID, func(message client.LogStreamMessage) error {
+		err = a.client.StreamLogs(streamCtx, entityName, entityID, func(message client.LogStreamMessage) error {
 			if deduper.ShouldSuppress(message) {
 				return nil
 			}
@@ -1720,7 +1741,7 @@ func (a *App) streamResourceLogsIntoView(session int, resourceID string, textVie
 				textView.ScrollToEnd()
 			})
 		}
-	}(session, resourceID)
+	}(session, entityID, entityName)
 }
 
 func (d *liveLogDeduper) ShouldSuppress(message client.LogStreamMessage) bool {
@@ -1878,6 +1899,8 @@ func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, 
 	switch value := row.Raw.(type) {
 	case client.Resource:
 		return value.ID, value.Name, "resource", true
+	case client.Executor:
+		return value.ID, value.Name, "executor", true
 	case client.Template:
 		return value.ID, value.Name, "template", true
 	case client.Workspace:

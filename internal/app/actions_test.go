@@ -52,6 +52,14 @@ func TestEntityActionPromptForRowSupportsEntities(t *testing.T) {
 	if sourceCodePrompt.Kind != "source_code" || sourceCodePrompt.Verb != "sync" || sourceCodePrompt.ID != "sc1" {
 		t.Fatalf("unexpected source code action prompt: %#v", sourceCodePrompt)
 	}
+
+	executorPrompt, ok := a.entityActionPromptForRow(tabledata.Row{Raw: client.Executor{ID: "e1", Name: "runner"}}, "dryrun")
+	if !ok || executorPrompt == nil {
+		t.Fatal("expected executor dryrun prompt")
+	}
+	if executorPrompt.Kind != "executor" || executorPrompt.Verb != "dryrun" || executorPrompt.ID != "e1" {
+		t.Fatalf("unexpected executor prompt: %#v", executorPrompt)
+	}
 }
 
 func TestTitleCase(t *testing.T) {
@@ -80,6 +88,9 @@ func TestActionPromptFactoriesReturnAction(t *testing.T) {
 		}},
 		{name: "workspace delete", mk: func() (*entityActionPrompt, bool) {
 			return a.workspaceActionPrompt(client.Workspace{ID: "w1", Name: "platform"}, "delete")
+		}},
+		{name: "executor dryrun", mk: func() (*entityActionPrompt, bool) {
+			return a.executorActionPrompt(client.Executor{ID: "e1", Name: "runner"}, "dryrun")
 		}},
 		{name: "resource execute", mk: func() (*entityActionPrompt, bool) {
 			return a.resourceActionPrompt(client.Resource{ID: "r1", Name: "redis"}, "execute")
@@ -122,6 +133,7 @@ func TestEntityMenuActionsFiltersEditForTemplatesAndIntegrations(t *testing.T) {
 		want []string
 	}{
 		{name: "template", kind: "template", in: []string{"enable", "edit", "delete"}, want: []string{"enable", "delete"}},
+		{name: "executor", kind: "executor", in: []string{"disable", "edit", "dryrun", "delete"}, want: []string{"dryrun", "disable", "delete"}},
 		{name: "integration", kind: "integration", in: []string{"disable", "edit", "delete"}, want: []string{"disable", "delete"}},
 		{name: "source_code", kind: "source_code", in: []string{"delete", "sync", "edit", "enable"}, want: []string{"enable", "sync", "delete"}},
 	} {

@@ -3,6 +3,7 @@ package resource
 import (
 	"github.com/electrolux-oss/ik-tui/internal/client"
 	"github.com/electrolux-oss/ik-tui/internal/resource/core"
+	"github.com/electrolux-oss/ik-tui/internal/resource/executors"
 	"github.com/electrolux-oss/ik-tui/internal/resource/integrations"
 	"github.com/electrolux-oss/ik-tui/internal/resource/resources"
 	"github.com/electrolux-oss/ik-tui/internal/resource/secrets"
@@ -10,8 +11,8 @@ import (
 	"github.com/electrolux-oss/ik-tui/internal/resource/source_codes"
 	"github.com/electrolux-oss/ik-tui/internal/resource/storages"
 	"github.com/electrolux-oss/ik-tui/internal/resource/templates"
-	"github.com/electrolux-oss/ik-tui/internal/resource/workspaces"
 	"github.com/electrolux-oss/ik-tui/internal/resource/workers"
+	"github.com/electrolux-oss/ik-tui/internal/resource/workspaces"
 )
 
 type Descriptor = core.Descriptor
@@ -21,6 +22,7 @@ type Registry = core.Registry
 func DefaultRegistry(c *client.Client) *Registry {
 	return core.NewRegistry(
 		resources.Descriptor(c),
+		executors.Descriptor(c),
 		source_codes.Descriptor(c),
 		source_code_versions.Descriptor(c),
 		templates.Descriptor(c),
