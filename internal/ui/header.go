@@ -17,7 +17,7 @@ type headerHints struct {
 var defaultHeaderHints = headerHints{
 	main: [][]menuHint{
 		{{key: "s", label: "sort"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-		{{key: "r", label: "refresh"}, {key: "enter", label: "overview"}},
+		{{key: "r", label: "refresh"}, {key: "enter", label: "overview"}, {key: "y", label: "yaml"}},
 		{{key: "l", label: "logs"}, {key: "a", label: "audit"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
 		{{key: "e", label: "entity"}, {key: "o", label: "settings"}},
@@ -66,7 +66,8 @@ var detailHeaderHints = headerHints{
 var resourceOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
-		{{key: "t", label: "template"}, {key: "y", label: "tree"}, {key: "i", label: "integrations"}},
+		{{key: "y", label: "yaml"}, {key: "t", label: "template"}, {key: "i", label: "integrations"}},
+		{{key: "T", label: "tree"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
 		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
@@ -75,8 +76,18 @@ var resourceOverviewHints = headerHints{
 var templateOverviewHints = headerHints{
 	main: [][]menuHint{
 		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}},
 		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
 		{{key: "t", label: "tree view"}, {key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
+var integrationOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}},
+		{{key: "x", label: "disable"}, {key: "X", label: "enable"}, {key: "D", label: "delete"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
 	},
 }
 
@@ -167,6 +178,10 @@ func (h *Header) SetResourceOverviewHotkeys() {
 
 func (h *Header) SetTemplateOverviewHotkeys() {
 	h.SetHotkeys(templateOverviewHints)
+}
+
+func (h *Header) SetIntegrationOverviewHotkeys() {
+	h.SetHotkeys(integrationOverviewHints)
 }
 
 func (h *Header) SetHotkeys(hints headerHints) {

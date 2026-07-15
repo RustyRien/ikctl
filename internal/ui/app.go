@@ -36,6 +36,7 @@ type App struct {
 	filterDone          func(string)
 	refreshFn           func()
 	enterFn             func(tabledata.Row)
+	yamlFn              func()
 	logsFn              func(tabledata.Row)
 	auditFn             func(tabledata.Row)
 	enableFn            func(tabledata.Row)
@@ -80,6 +81,7 @@ const (
 	detailHotkeysAuditDetail
 	detailHotkeysResourceOverview
 	detailHotkeysTemplateOverview
+	detailHotkeysIntegrationOverview
 )
 
 var loadingFrames = []string{"|", "/", "-", "\\"}
@@ -122,7 +124,6 @@ func NewApp(cfg config.Config, version string) *App {
 
 	app.root = app.pages
 	app.app.SetRoot(app.root, true)
-	app.app.EnableMouse(true)
 	app.app.SetInputCapture(app.capture)
 	app.table.Widget().SetBorder(true).SetTitle("Resources")
 	app.table.Widget().SetBackgroundColor(colorBg)
@@ -225,6 +226,10 @@ func (a *App) SetEnterFunc(fn func(tabledata.Row)) {
 	a.enterFn = fn
 }
 
+func (a *App) SetYAMLFunc(fn func()) {
+	a.yamlFn = fn
+}
+
 func (a *App) SetLogsFunc(fn func(tabledata.Row)) {
 	a.logsFn = fn
 }
@@ -314,6 +319,10 @@ func (a *App) SetEntityTitle(title string, emptyLabel string) {
 
 func (a *App) SelectedRow() (tabledata.Row, bool) {
 	return a.table.SelectedRow()
+}
+
+func (a *App) DetailVisible() bool {
+	return a.detailVisible()
 }
 
 func (a *App) OpenOverlay(title string, text string) {
@@ -407,6 +416,12 @@ func (a *App) SetTemplateOverviewHotkeys() {
 	a.filterMenuMode = false
 	a.header.SetTemplateOverviewHotkeys()
 	a.updateDetailHotkeys(detailHotkeysTemplateOverview)
+}
+
+func (a *App) SetIntegrationOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetIntegrationOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysIntegrationOverview)
 }
 
 func (a *App) CloseDetail() {
@@ -684,6 +699,10 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 					return nil
 				}
 			}
+			if event.Rune() == 'y' && a.yamlFn != nil {
+				a.yamlFn()
+				return nil
+			}
 		}
 		if event.Key() == tcell.KeyEnter && a.enterFn != nil {
 			if row, ok := a.table.SelectedRow(); ok {
@@ -771,6 +790,11 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				if row, ok := a.table.SelectedRow(); ok {
 					a.logsFn(row)
 				}
+			}
+			return nil
+		case 'y':
+			if a.yamlFn != nil {
+				a.yamlFn()
 			}
 			return nil
 		case 'a':
@@ -948,6 +972,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetResourceOverviewHotkeys()
 	case detailHotkeysTemplateOverview:
 		a.header.SetTemplateOverviewHotkeys()
+	case detailHotkeysIntegrationOverview:
+		a.header.SetIntegrationOverviewHotkeys()
 	default:
 		a.header.ResetHotkeys()
 	}

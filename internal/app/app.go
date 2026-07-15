@@ -11,6 +11,7 @@ import (
 	"github.com/electrolux-oss/ik-tui/internal/client"
 	"github.com/electrolux-oss/ik-tui/internal/config"
 	"github.com/electrolux-oss/ik-tui/internal/model"
+	"github.com/electrolux-oss/ik-tui/internal/printer"
 	"github.com/electrolux-oss/ik-tui/internal/render"
 	"github.com/electrolux-oss/ik-tui/internal/resource"
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
@@ -64,6 +65,16 @@ type entityActionPrompt struct {
 }
 
 var logLevelPrefixRX = regexp.MustCompile(`(?i)^\[(trace|debug|info|warn|warning|error|fatal)\]\s*`)
+var yamlKeyValRX = regexp.MustCompile(`\A(\s*)([\w\-./\s]+):\s(.+)\z`)
+var yamlListKeyValRX = regexp.MustCompile(`\A(\s*-\s)([\w\-./\s]+):\s(.+)\z`)
+var yamlKeyRX = regexp.MustCompile(`\A(\s*)([\w\-./\s]+):\s*\z`)
+var yamlSearchRX = regexp.MustCompile(`<<<("search_\d+")>>>(.+)<<<"">>>`)
+
+const (
+	yamlFullFmt  = "%s[steelblue::b]%s[white::-]: [papayawhip::]%s"
+	yamlKeyFmt   = "%s[steelblue::b]%s[white::-]:"
+	yamlValueFmt = "[papayawhip::]%s"
+)
 
 type App struct {
 	config                    config.Config
@@ -159,6 +170,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 
 	ui.SetRefreshFunc(app.requestRefresh)
 	ui.SetEnterFunc(app.openOverview)
+	ui.SetYAMLFunc(app.openSelectedYAML)
 	ui.SetLogsFunc(app.openLogs)
 	ui.SetAuditFunc(app.openAuditLogs)
 	ui.SetEnableFunc(func(row tabledata.Row) { app.openEntityActionPrompt(row, "enable") })
@@ -229,6 +241,127 @@ func (a *App) requestRefresh() {
 	case a.manualKick <- struct{}{}:
 	default:
 	}
+}
+
+func (a *App) openSelectedYAML() {
+	row, ok := a.ui.SelectedRow()
+	if !ok {
+		return
+	}
+	a.openYAML(row)
+}
+
+func (a *App) openYAML(row tabledata.Row) {
+	if a.ui.DetailVisible() {
+		a.stopLiveLogStream()
+	}
+
+	title, entityID, fetch, ok := a.yamlDetailForRow(row)
+	if !ok {
+		return
+	}
+
+	a.clearOverviewJumpState()
+	a.auditLogRows = nil
+	a.auditLogTable = nil
+	a.ui.OpenDetail(title, "Loading YAML...")
+	a.ui.SetDetailHotkeys()
+
+	go func(title string, entityID string, fetch func(context.Context, string) (any, error)) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		raw, err := fetch(ctx, entityID)
+		var primitive tview.Primitive
+		if err != nil {
+			primitive = errorView(fmt.Sprintf("Failed to render YAML.\n\n%v", err))
+		} else if raw == nil {
+			primitive = errorView("YAML source not found")
+		} else {
+			var builder strings.Builder
+			if err := printer.Print(&builder, "yaml", nil, nil, []any{raw}); err != nil {
+				primitive = errorView(fmt.Sprintf("Failed to render YAML.\n\n%v", err))
+			} else {
+				primitive = newYAMLTextView(colorizeYAML(builder.String(), !a.config.NoColors), !a.config.NoColors)
+			}
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			a.ui.OpenDetailPrimitive(title, primitive)
+			a.ui.SetDetailHotkeys()
+		})
+	}(title, entityID, fetch)
+}
+
+func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string, fetch func(context.Context, string) (any, error), ok bool) {
+	switch value := row.Raw.(type) {
+	case client.Resource:
+		return fmt.Sprintf("YAML: Resource %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Resource(ctx, id)
+		}, true
+	case client.Template:
+		return fmt.Sprintf("YAML: Template %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Template(ctx, id)
+		}, true
+	case client.Integration:
+		return fmt.Sprintf("YAML: Integration %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Integration(ctx, id)
+		}, true
+	default:
+		return "", "", nil, false
+	}
+}
+
+func newYAMLTextView(text string, dynamic bool) *tview.TextView {
+	view := tview.NewTextView()
+	view.SetDynamicColors(dynamic)
+	view.SetScrollable(true)
+	view.SetWrap(false)
+	view.SetWordWrap(false)
+	view.SetText(text)
+	view.ScrollToBeginning()
+	return view
+}
+
+func colorizeYAML(text string, colorsEnabled bool) string {
+	if text == "" {
+		return ""
+	}
+	if !colorsEnabled {
+		return text
+	}
+
+	lines := strings.Split(tview.Escape(text), "\n")
+	for index, line := range lines {
+		lines[index] = colorizeYAMLLine(line, colorsEnabled)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func colorizeYAMLLine(line string, colorsEnabled bool) string {
+	if line == "" {
+		return ""
+	}
+	if matches := yamlListKeyValRX.FindStringSubmatch(line); len(matches) == 4 {
+		return enableYAMLSearchRegions(fmt.Sprintf(yamlFullFmt, matches[1], matches[2], matches[3]))
+	}
+	if matches := yamlKeyValRX.FindStringSubmatch(line); len(matches) == 4 {
+		return enableYAMLSearchRegions(fmt.Sprintf(yamlFullFmt, matches[1], matches[2], matches[3]))
+	}
+	if matches := yamlKeyRX.FindStringSubmatch(line); len(matches) == 3 {
+		return enableYAMLSearchRegions(fmt.Sprintf(yamlKeyFmt, matches[1], matches[2]))
+	}
+	return enableYAMLSearchRegions(fmt.Sprintf(yamlValueFmt, line))
+}
+
+func enableYAMLSearchRegions(value string) string {
+	if yamlSearchRX.MatchString(value) {
+		return strings.ReplaceAll(strings.ReplaceAll(value, "<<<", "["), ">>>", "]")
+	}
+	return value
 }
 
 func (a *App) loadCurrentUser() {

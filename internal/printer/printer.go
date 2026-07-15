@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
+	"sort"
 	"strings"
 	"text/tabwriter"
+	"unicode"
 
 	"github.com/electrolux-oss/ik-tui/internal/tabledata"
 	"gopkg.in/yaml.v3"
@@ -27,7 +30,7 @@ func Print(w io.Writer, format string, headers []tabledata.Header, rows []tabled
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(normalizeRaw(raw))
 	case "yaml":
-		data, err := yaml.Marshal(normalizeRaw(raw))
+		data, err := yaml.Marshal(normalizeYAMLValue(normalizeRaw(raw)))
 		if err != nil {
 			return err
 		}
@@ -76,4 +79,136 @@ func normalizeRaw(raw []any) any {
 		return raw[0]
 	}
 	return raw
+}
+
+func normalizeYAMLValue(value any) *yaml.Node {
+	return normalizeYAMLReflect(reflect.ValueOf(value))
+}
+
+func normalizeYAMLReflect(value reflect.Value) *yaml.Node {
+	if !value.IsValid() {
+		return scalarYAMLNode(nil)
+	}
+
+	for value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return scalarYAMLNode(nil)
+		}
+		value = value.Elem()
+	}
+
+	typeOf := value.Type()
+	if typeOf.PkgPath() == "time" && typeOf.Name() == "Time" {
+		return scalarYAMLNode(value.Interface())
+	}
+
+	switch value.Kind() {
+	case reflect.Struct:
+		keys := make([]string, 0, value.NumField())
+		values := make(map[string]reflect.Value, value.NumField())
+		for i := 0; i < value.NumField(); i++ {
+			field := typeOf.Field(i)
+			if !field.IsExported() {
+				continue
+			}
+			key, ok := yamlFieldName(field)
+			if !ok {
+				continue
+			}
+			keys = append(keys, key)
+			values[key] = value.Field(i)
+		}
+		sort.Strings(keys)
+		node := &yaml.Node{Kind: yaml.MappingNode}
+		for _, key := range keys {
+			node.Content = append(node.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+				normalizeYAMLReflect(values[key]),
+			)
+		}
+		return node
+	case reflect.Slice, reflect.Array:
+		node := &yaml.Node{Kind: yaml.SequenceNode}
+		for i := 0; i < value.Len(); i++ {
+			node.Content = append(node.Content, normalizeYAMLReflect(value.Index(i)))
+		}
+		return node
+	case reflect.Map:
+		if value.IsNil() {
+			return &yaml.Node{Kind: yaml.MappingNode}
+		}
+		keys := make([]string, 0, value.Len())
+		values := make(map[string]reflect.Value, value.Len())
+		iter := value.MapRange()
+		for iter.Next() {
+			key := fmt.Sprint(iter.Key().Interface())
+			keys = append(keys, key)
+			values[key] = iter.Value()
+		}
+		sort.Strings(keys)
+		node := &yaml.Node{Kind: yaml.MappingNode}
+		for _, key := range keys {
+			node.Content = append(node.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+				normalizeYAMLReflect(values[key]),
+			)
+		}
+		return node
+	default:
+		return scalarYAMLNode(value.Interface())
+	}
+}
+
+func yamlFieldName(field reflect.StructField) (string, bool) {
+	if tag := field.Tag.Get("yaml"); tag != "" {
+		name := strings.Split(tag, ",")[0]
+		if name == "-" {
+			return "", false
+		}
+		if name != "" {
+			return name, true
+		}
+	}
+	if tag := field.Tag.Get("json"); tag != "" {
+		name := strings.Split(tag, ",")[0]
+		if name == "-" {
+			return "", false
+		}
+		if name != "" {
+			return toSnakeCase(name), true
+		}
+	}
+	return toSnakeCase(field.Name), true
+}
+
+func toSnakeCase(value string) string {
+	if value == "" {
+		return ""
+	}
+
+	runes := []rune(value)
+	var out strings.Builder
+	for i, r := range runes {
+		if r == '-' || r == ' ' {
+			out.WriteRune('_')
+			continue
+		}
+		if unicode.IsUpper(r) {
+			if i > 0 && (unicode.IsLower(runes[i-1]) || unicode.IsDigit(runes[i-1]) || (i+1 < len(runes) && unicode.IsLower(runes[i+1]))) {
+				out.WriteRune('_')
+			}
+			out.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
+func scalarYAMLNode(value any) *yaml.Node {
+	node := &yaml.Node{}
+	if err := node.Encode(value); err != nil {
+		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: fmt.Sprint(value)}
+	}
+	return node
 }

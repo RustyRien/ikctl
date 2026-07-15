@@ -251,6 +251,6 @@ func templateOverviewView(template client.Template) tview.Primitive {
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(summary, 7, 0, true)
 	root.AddItem(description, 0, 1, false)
-	root.AddItem(overviewFooter("t tree view  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("y yaml  t tree view  Esc/q close"), 1, 0, false)
 	return root
 }

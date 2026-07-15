@@ -373,7 +373,7 @@ func (a *App) resourceOverviewJumpActions(resource client.Resource) map[rune]fun
 			)
 		}
 	}
-	jumpActions['y'] = func() {
+	jumpActions['T'] = func() {
 		a.openResourceTree(resource.ID, valueOr(resource.Name, resource.ID))
 	}
 	if len(jumpActions) == 0 {
@@ -882,11 +882,12 @@ func resourceTemplateTypes(resource client.Resource) []string {
 }
 
 func resourceTemplateHint(resource client.Resource) string {
-	hints := make([]string, 0, 3)
+	hints := make([]string, 0, 4)
+	hints = append(hints, "y yaml")
 	if resource.Template != nil && resource.Template.ID != "" {
 		hints = append(hints, "t template")
 	}
-	hints = append(hints, "y tree")
+	hints = append(hints, "T tree")
 	if len(resource.Integrations) > 0 {
 		hints = append(hints, "i integrations")
 	}

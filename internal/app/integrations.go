@@ -19,7 +19,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.ui.OpenDetail(title, "Loading integration overview...")
-	a.ui.SetDetailHotkeys()
+	a.ui.SetIntegrationOverviewHotkeys()
 
 	go func() {
 		done := a.ui.BeginLoading()
@@ -42,7 +42,7 @@ func (a *App) openIntegrationOverview(id string, name string) {
 
 		a.ui.Application().QueueUpdateDraw(func() {
 			a.ui.OpenDetailPrimitive(title, primitive)
-			a.ui.SetDetailHotkeys()
+			a.ui.SetIntegrationOverviewHotkeys()
 		})
 	}()
 }
@@ -66,6 +66,6 @@ func integrationOverviewView(integration client.Integration) tview.Primitive {
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(summary, 8, 0, true)
 	root.AddItem(description, 0, 1, false)
-	root.AddItem(overviewFooter("Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("y yaml  Esc/q close"), 1, 0, false)
 	return root
 }

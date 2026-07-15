@@ -25,6 +25,7 @@ var availableCommands = []string{
 	"settings",
 	"template-filter",
 	"templates",
+	"yaml",
 }
 
 func (a *App) runCommand(input string) {
@@ -75,6 +76,12 @@ func (a *App) runCommand(input string) {
 			return
 		}
 		a.commandError(input, "No row selected for overview")
+	case "yaml", "show":
+		if row, ok := a.ui.SelectedRow(); ok {
+			a.openYAML(row)
+			return
+		}
+		a.commandError(input, "No row selected for yaml")
 	case "template-filter", "tf":
 		a.openTemplateFilter()
 	case "integration-filter", "if":
@@ -126,7 +133,7 @@ func (a *App) suggestCommand(input string) (string, []string) {
 }
 
 func (a *App) commandError(command string, message string) {
-	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :templates\n  :integrations\n  :refresh\n  :enable\n  :disable\n  :delete\n  :settings\n  :columns\n  :entity\n  :open\n  :logs\n  :audit\n  :template-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
+	view := errorView(fmt.Sprintf("%s\n\nCommand: :%s\n\nAvailable commands:\n  :q\n  :resources\n  :templates\n  :integrations\n  :refresh\n  :enable\n  :disable\n  :delete\n  :settings\n  :columns\n  :entity\n  :open\n  :yaml\n  :logs\n  :audit\n  :template-filter\n  :integration-filter\n  :destroyed\n  :reset-filters", message, strings.TrimSpace(strings.TrimPrefix(command, ":"))))
 	a.ui.OpenOverlayPrimitive("Command", view)
 }
 
