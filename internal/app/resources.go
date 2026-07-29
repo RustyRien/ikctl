@@ -993,9 +993,11 @@ func filterSourceCodeVersions(versions []client.SourceCodeVersion, query string)
 func (a *App) openResourceOverview(resource client.Resource) {
 	session := a.nextLiveLogSession()
 	a.rememberCurrentDetailState()
+	a.ui.SetDetailActionRow(tabledata.Row{ID: resource.ID, Raw: resource})
 
 	title := fmt.Sprintf("Resource: %s", resource.Name)
 	a.clearOverviewJumpState()
+	a.activeProjectDetail = nil
 	a.activeTemplateDetail = nil
 	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil

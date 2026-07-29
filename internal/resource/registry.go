@@ -5,6 +5,7 @@ import (
 	"github.com/electrolux-oss/ik-tui/internal/resource/core"
 	"github.com/electrolux-oss/ik-tui/internal/resource/executors"
 	"github.com/electrolux-oss/ik-tui/internal/resource/integrations"
+	"github.com/electrolux-oss/ik-tui/internal/resource/projects"
 	"github.com/electrolux-oss/ik-tui/internal/resource/resources"
 	"github.com/electrolux-oss/ik-tui/internal/resource/secrets"
 	"github.com/electrolux-oss/ik-tui/internal/resource/source_code_versions"
@@ -22,6 +23,7 @@ type Registry = core.Registry
 func DefaultRegistry(c *client.Client) *Registry {
 	return core.NewRegistry(
 		resources.Descriptor(c),
+		projects.Descriptor(c),
 		executors.Descriptor(c),
 		source_codes.Descriptor(c),
 		source_code_versions.Descriptor(c),

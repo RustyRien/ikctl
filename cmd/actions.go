@@ -20,12 +20,14 @@ func enableCmd() *cobra.Command {
 			return cli.EnableExecutor(ctx, id)
 		case "integrations":
 			return cli.EnableIntegration(ctx, id)
+		case "projects":
+			return cli.EnableProject(ctx, id)
 		case "templates":
 			return cli.EnableTemplate(ctx, id)
 		case "source_code_versions":
 			return cli.EnableSourceCodeVersion(ctx, id)
 		default:
-			return fmt.Errorf("enable is currently supported only for executors, integrations, templates, and source_code_versions")
+			return fmt.Errorf("enable is currently supported only for executors, integrations, projects, templates, and source_code_versions")
 		}
 	})
 }
@@ -37,12 +39,14 @@ func disableCmd() *cobra.Command {
 			return cli.DisableExecutor(ctx, id)
 		case "integrations":
 			return cli.DisableIntegration(ctx, id)
+		case "projects":
+			return cli.DisableProject(ctx, id)
 		case "templates":
 			return cli.DisableTemplate(ctx, id)
 		case "source_code_versions":
 			return cli.DisableSourceCodeVersion(ctx, id)
 		default:
-			return fmt.Errorf("disable is currently supported only for executors, integrations, templates, and source_code_versions")
+			return fmt.Errorf("disable is currently supported only for executors, integrations, projects, templates, and source_code_versions")
 		}
 	})
 }
@@ -79,7 +83,7 @@ func deleteCmd() *cobra.Command {
 
 func entityActionCmd(use string, short string, action func(context.Context, *client.Client, string, string) error) *cobra.Command {
 	return &cobra.Command{
-		Use:   use + " <executors|integrations|templates|source_code_versions|workspaces> <name-or-id>",
+		Use:   use + " <executors|integrations|projects|templates|source_code_versions|workspaces> <name-or-id>",
 		Short: short,
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -107,8 +111,8 @@ func runEntityAction(cmd *cobra.Command, verb string, entity string, nameOrID st
 	if !ok {
 		return fmt.Errorf("unknown entity %q (valid: %s)", entity, strings.Join(registry.Names(), ", "))
 	}
-	if descriptor.Name != "executors" && descriptor.Name != "integrations" && descriptor.Name != "templates" && descriptor.Name != "source_code_versions" && !(verb == "delete" && descriptor.Name == "workspaces") {
-		return fmt.Errorf("%s is currently supported only for executors, integrations, templates, source_code_versions, and workspaces delete", verb)
+	if descriptor.Name != "executors" && descriptor.Name != "integrations" && descriptor.Name != "projects" && descriptor.Name != "templates" && descriptor.Name != "source_code_versions" && !(verb == "delete" && descriptor.Name == "workspaces") {
+		return fmt.Errorf("%s is currently supported only for executors, integrations, projects, templates, source_code_versions, and workspaces delete", verb)
 	}
 	if verb == "dryrun" && descriptor.Name != "executors" {
 		return fmt.Errorf("dryrun is currently supported only for executors")
@@ -158,6 +162,12 @@ func actionTarget(entity string, raw any) (actionEntityTarget, error) {
 			return actionEntityTarget{}, fmt.Errorf("unexpected integration payload type %T", raw)
 		}
 		return actionEntityTarget{Kind: entity, ID: integration.ID, Name: integration.Name}, nil
+	case "projects":
+		project, ok := raw.(client.Project)
+		if !ok {
+			return actionEntityTarget{}, fmt.Errorf("unexpected project payload type %T", raw)
+		}
+		return actionEntityTarget{Kind: entity, ID: project.ID, Name: project.Name}, nil
 	case "templates":
 		template, ok := raw.(client.Template)
 		if !ok {

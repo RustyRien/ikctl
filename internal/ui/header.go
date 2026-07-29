@@ -164,6 +164,15 @@ var workspaceOverviewHints = headerHints{
 	},
 }
 
+var projectOverviewHints = headerHints{
+	main: [][]menuHint{
+		{{key: "up/down", label: "scroll"}, {key: "ctrl-u", label: "up"}, {key: "ctrl-d", label: "down"}},
+		{{key: "y", label: "yaml"}, {key: "l", label: "logs"}, {key: "a", label: "audit"}},
+		{{key: "r", label: "resources"}, {key: "D", label: "delete"}, {key: "E", label: "edit"}},
+		{{key: "esc", label: "back"}, {key: "q", label: "back"}},
+	},
+}
+
 var ikLogo = []string{
 	`.___ ___  __.`,
 	`|   |   |/ _|`,
@@ -283,6 +292,10 @@ func (h *Header) SetWorkerOverviewHotkeys() {
 
 func (h *Header) SetWorkspaceOverviewHotkeys() {
 	h.SetHotkeys(workspaceOverviewHints)
+}
+
+func (h *Header) SetProjectOverviewHotkeys() {
+	h.SetHotkeys(projectOverviewHints)
 }
 
 func (h *Header) SetHotkeys(hints headerHints) {

@@ -137,6 +137,8 @@ func (a *App) entityActionPromptForRow(row tabledata.Row, verb string) (*entityA
 	switch value := row.Raw.(type) {
 	case client.Template:
 		return a.templateActionPrompt(value, verb)
+	case client.Project:
+		return a.projectActionPrompt(value, verb)
 	case client.Executor:
 		return a.executorActionPrompt(value, verb)
 	case client.SourceCode:
@@ -181,6 +183,12 @@ func (a *App) openEntityActionMenu(row tabledata.Row) {
 			return []string{"enable", "disable", "delete"}, nil
 		}, func(action string) (*entityActionPrompt, bool) {
 			return a.templateActionPrompt(value, action)
+		})
+	case client.Project:
+		a.openTypedEntityActionMenu("project", value.ID, value.Name, func(context.Context, string) ([]string, error) {
+			return []string{"delete"}, nil
+		}, func(action string) (*entityActionPrompt, bool) {
+			return a.projectActionPrompt(value, action)
 		})
 	case client.SourceCode:
 		a.openTypedEntityActionMenu("source_code", value.ID, valueOr(value.DisplayName(), value.ID), func(context.Context, string) ([]string, error) {
@@ -376,6 +384,14 @@ func (a *App) templateActionPrompt(value client.Template, verb string) (*entityA
 		return nil, false
 	}
 	return &entityActionPrompt{Verb: verb, Kind: "template", ID: value.ID, Name: value.Name, Action: action}, true
+}
+
+func (a *App) projectActionPrompt(value client.Project, verb string) (*entityActionPrompt, bool) {
+	if verb != "delete" {
+		return nil, false
+	}
+	action := func(ctx context.Context) (string, error) { return "deleted", a.client.DeleteProject(ctx, value.ID) }
+	return &entityActionPrompt{Verb: verb, Kind: "project", ID: value.ID, Name: value.Name, Action: action}, true
 }
 
 func (a *App) sourceCodeActionPrompt(value client.SourceCode, verb string) (*entityActionPrompt, bool) {

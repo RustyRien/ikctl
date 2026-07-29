@@ -94,6 +94,30 @@ func (t Template) GetName() string {
 	return t.Name
 }
 
+type Project struct {
+	ID               string           `json:"id"`
+	Name             string           `json:"name"`
+	Description      string           `json:"description"`
+	WorkspaceID      string           `json:"workspaceId"`
+	Configuration    map[string]any   `json:"configuration"`
+	DependencyTags   []map[string]any `json:"dependencyTags"`
+	DependencyConfig []map[string]any `json:"dependencyConfig"`
+	Labels           []string         `json:"labels"`
+	Status           string           `json:"status"`
+	RevisionNumber   int              `json:"revisionNumber"`
+	ResourcesCount   int              `json:"resourcesCount"`
+	CreatedAt        time.Time        `json:"createdAt"`
+	UpdatedAt        time.Time        `json:"updatedAt"`
+	EntityName       string           `json:"entityName"`
+	Creator          *Creator         `json:"creator"`
+	Owners           []Creator        `json:"owners"`
+	Workspace        *Workspace       `json:"workspace"`
+}
+
+func (p Project) GetName() string {
+	return p.Name
+}
+
 type TemplateReference struct {
 	ID                 string   `json:"id"`
 	Name               string   `json:"name"`
@@ -360,6 +384,11 @@ type templatesQueryData struct {
 	TemplatesCount int        `json:"templatesCount"`
 }
 
+type projectsQueryData struct {
+	Projects      []Project `json:"projects"`
+	ProjectsCount int       `json:"projectsCount"`
+}
+
 type workspacesQueryData struct {
 	Workspaces      []Workspace `json:"workspaces"`
 	WorkspacesCount int         `json:"workspacesCount"`
@@ -371,6 +400,10 @@ type workspaceQueryData struct {
 
 type templateQueryData struct {
 	Template *Template `json:"template"`
+}
+
+type projectQueryData struct {
+	Project *Project `json:"project"`
 }
 
 type executorsQueryData struct {
@@ -474,6 +507,10 @@ type templateActionMutationData struct {
 	TemplateAction *entityActionResult `json:"templateAction"`
 }
 
+type projectActionMutationData struct {
+	ProjectAction *entityActionResult `json:"projectAction"`
+}
+
 type refreshAuthTokenMutationData struct {
 	RefreshAuthToken *RefreshAuthTokenResult `json:"refreshAuthToken"`
 }
@@ -496,6 +533,10 @@ type deleteSourceCodeVersionMutationData struct {
 
 type deleteTemplateMutationData struct {
 	DeleteTemplate bool `json:"deleteTemplate"`
+}
+
+type deleteProjectMutationData struct {
+	DeleteProject bool `json:"deleteProject"`
 }
 
 type deleteWorkspaceMutationData struct {
@@ -670,6 +711,11 @@ type ExecutorsResult struct {
 
 type TemplatesResult struct {
 	Items []Template
+	Total int
+}
+
+type ProjectsResult struct {
+	Items []Project
 	Total int
 }
 

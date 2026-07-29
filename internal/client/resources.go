@@ -92,6 +92,21 @@ const templatesQuery = `query ListTemplates($filter: JSON, $sort: [String!], $ra
   templatesCount(filter: $filter)
 }`
 
+const projectsQuery = `query ListProjects($filter: JSON, $sort: [String!], $range: [Int!]) {
+  projects(filter: $filter, sort: $sort, range: $range) {
+    id
+    name
+    description
+    labels
+    status
+	    resourcesCount
+    createdAt
+    updatedAt
+    entityName
+  }
+  projectsCount(filter: $filter)
+}`
+
 const resourceQuery = `query GetResource($id: UUID!) {
 	resource(id: $id) {
 		id
@@ -217,6 +232,41 @@ const templateQuery = `query GetTemplate($id: UUID!) {
   }
 }`
 
+const projectQuery = `query GetProject($id: UUID!) {
+  project(id: $id) {
+    id
+    name
+    description
+	    workspaceId
+	    configuration
+	    dependencyTags
+	    dependencyConfig
+	    labels
+	    status
+	    revisionNumber
+	    resourcesCount
+    createdAt
+    updatedAt
+    entityName
+    creator {
+      id
+      identifier
+      email
+      displayName
+    }
+	    owners {
+      id
+	      identifier
+	      email
+	      displayName
+    }
+	    workspace {
+      id
+      name
+    }
+  }
+}`
+
 const templateTreeQuery = `query TemplateTree($id: UUID!, $direction: String!) {
   templateTree(id: $id, direction: $direction) {
     id
@@ -258,6 +308,14 @@ const templateActionMutation = `mutation TemplateAction($id: UUID!, $input: Temp
   }
 }`
 
+const projectActionMutation = `mutation ProjectAction($id: UUID!, $input: ProjectActionInput!) {
+  projectAction(id: $id, input: $input) {
+    id
+    entityName
+    status
+  }
+}`
+
 const updateResourceMutation = `mutation UpdateResource($id: UUID!, $input: ResourceUpdateInput!) {
   updateResource(id: $id, input: $input) {
     id
@@ -289,6 +347,10 @@ const updateTemplateMutation = `mutation UpdateTemplate($id: UUID!, $input: Temp
 
 const deleteTemplateMutation = `mutation DeleteTemplate($id: UUID!) {
   deleteTemplate(id: $id)
+}`
+
+const deleteProjectMutation = `mutation DeleteProject($id: UUID!) {
+  deleteProject(id: $id)
 }`
 
 const resourceTreeQuery = `query ResourceTree($id: UUID!, $direction: String!) {
@@ -375,6 +437,20 @@ func (c *Client) Templates(ctx context.Context, filter map[string]any, sort []st
 	return TemplatesResult{Items: resp.Templates, Total: resp.TemplatesCount}, nil
 }
 
+func (c *Client) Projects(ctx context.Context, filter map[string]any, sort []string, pageRange []int) (ProjectsResult, error) {
+	variables := listVariables(filter, sort, pageRange)
+
+	resp, err := query[projectsQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query:     projectsQuery,
+		Variables: variables,
+	})
+	if err != nil {
+		return ProjectsResult{}, err
+	}
+
+	return ProjectsResult{Items: resp.Projects, Total: resp.ProjectsCount}, nil
+}
+
 func (c *Client) Template(ctx context.Context, id string) (*Template, error) {
 	resp, err := query[templateQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: templateQuery,
@@ -386,6 +462,17 @@ func (c *Client) Template(ctx context.Context, id string) (*Template, error) {
 		return nil, err
 	}
 	return resp.Template, nil
+}
+
+func (c *Client) Project(ctx context.Context, id string) (*Project, error) {
+	resp, err := query[projectQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query:     projectQuery,
+		Variables: map[string]any{"id": id},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Project, nil
 }
 
 func (c *Client) TemplateTree(ctx context.Context, id string, direction string) (*TemplateTreeNode, error) {
@@ -515,6 +602,30 @@ func (c *Client) DeleteTemplate(ctx context.Context, id string) error {
 	return nil
 }
 
+func (c *Client) DeleteProject(ctx context.Context, id string) error {
+	resp, err := query[deleteProjectMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: deleteProjectMutation,
+		Variables: map[string]any{
+			"id": id,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.DeleteProject {
+		return errors.New("project delete failed")
+	}
+	return nil
+}
+
+func (c *Client) EnableProject(ctx context.Context, id string) error {
+	return c.projectAction(ctx, id, "enable")
+}
+
+func (c *Client) DisableProject(ctx context.Context, id string) error {
+	return c.projectAction(ctx, id, "disable")
+}
+
 func (c *Client) ResourceTree(ctx context.Context, id string, direction string) (*ResourceTreeNode, error) {
 	resp, err := query[resourceTreeQueryData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: resourceTreeQuery,
@@ -532,6 +643,19 @@ func (c *Client) ResourceTree(ctx context.Context, id string, direction string) 
 func (c *Client) templateAction(ctx context.Context, id string, action string) error {
 	_, err := query[templateActionMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
 		Query: templateActionMutation,
+		Variables: map[string]any{
+			"id": id,
+			"input": map[string]any{
+				"action": action,
+			},
+		},
+	})
+	return err
+}
+
+func (c *Client) projectAction(ctx context.Context, id string, action string) error {
+	_, err := query[projectActionMutationData](ctx, c.httpClient, c.endpoint, c.tokenProvider, graphqlRequest{
+		Query: projectActionMutation,
 		Variables: map[string]any{
 			"id": id,
 			"input": map[string]any{

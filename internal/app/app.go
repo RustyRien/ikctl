@@ -71,6 +71,7 @@ type detailStateSnapshot struct {
 	AuditLogTable                 *tview.Table
 	OverviewTree                  *overviewTreeSelection
 	ActiveTemplateDetail          *templateDetailSelection
+	ActiveProjectDetail           *entityDetailSelection
 	ActiveExecutorDetail          *entityDetailSelection
 	ActiveSourceCodeDetail        *entityDetailSelection
 	ActiveSourceCodeVersionDetail *entityDetailSelection
@@ -162,6 +163,8 @@ type App struct {
 	visibleResourceColumns          map[string]bool
 	templateColumnsTable            *tview.Table
 	visibleTemplateColumns          map[string]bool
+	projectColumnsTable             *tview.Table
+	visibleProjectColumns           map[string]bool
 	workspaceColumnsTable           *tview.Table
 	visibleWorkspaceColumns         map[string]bool
 	resourceStorageFilter           *client.Storage
@@ -172,6 +175,7 @@ type App struct {
 	resourceIntegrationFilter       *client.Integration
 	hideDestroyedResources          bool
 	activeTemplateDetail            *templateDetailSelection
+	activeProjectDetail             *entityDetailSelection
 	activeExecutorDetail            *entityDetailSelection
 	activeSourceCodeDetail          *entityDetailSelection
 	activeSourceCodeVersionDetail   *entityDetailSelection
@@ -214,6 +218,7 @@ func NewWithClient(cfg config.Config, build BuildInfo, activeEntity string, cli 
 	}
 	app.visibleResourceColumns = defaultVisibleResourceColumns()
 	app.visibleTemplateColumns = defaultVisibleTemplateColumns()
+	app.visibleProjectColumns = defaultVisibleProjectColumns()
 	app.visibleWorkspaceColumns = defaultVisibleWorkspaceColumns()
 	app.applySavedViewPreferences()
 
@@ -277,6 +282,7 @@ func (a *App) captureDetailState() *detailStateSnapshot {
 		AuditLogTable:                 a.auditLogTable,
 		OverviewTree:                  a.overviewTree,
 		ActiveTemplateDetail:          a.activeTemplateDetail,
+		ActiveProjectDetail:           a.activeProjectDetail,
 		ActiveExecutorDetail:          a.activeExecutorDetail,
 		ActiveSourceCodeDetail:        a.activeSourceCodeDetail,
 		ActiveSourceCodeVersionDetail: a.activeSourceCodeVersionDetail,
@@ -316,6 +322,7 @@ func (a *App) restoreDetailState(state any) {
 	a.auditLogTable = snapshot.AuditLogTable
 	a.overviewTree = snapshot.OverviewTree
 	a.activeTemplateDetail = snapshot.ActiveTemplateDetail
+	a.activeProjectDetail = snapshot.ActiveProjectDetail
 	a.activeExecutorDetail = snapshot.ActiveExecutorDetail
 	a.activeSourceCodeDetail = snapshot.ActiveSourceCodeDetail
 	a.activeSourceCodeVersionDetail = snapshot.ActiveSourceCodeVersionDetail
@@ -462,6 +469,10 @@ func (a *App) yamlDetailForRow(row tabledata.Row) (title string, entityID string
 		return fmt.Sprintf("YAML: Template %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.Template(ctx, id)
 		}, true
+	case client.Project:
+		return fmt.Sprintf("YAML: Project %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
+			return a.client.Project(ctx, id)
+		}, true
 	case client.Workspace:
 		return fmt.Sprintf("YAML: Workspace %s", valueOr(value.Name, value.ID)), value.ID, func(ctx context.Context, id string) (any, error) {
 			return a.client.Workspace(ctx, id)
@@ -607,6 +618,9 @@ func (a *App) refresh() {
 	if a.activeKind == model.EntityTemplates {
 		headers, rows = a.projectTemplateList(headers, rows)
 	}
+	if a.activeKind == model.EntityProjects {
+		headers, rows = a.projectProjectList(headers, rows)
+	}
 	if a.activeKind == model.EntityWorkspaces {
 		headers, rows = a.projectWorkspaceList(headers, rows)
 	}
@@ -643,6 +657,9 @@ func (a *App) renderCurrentModel() {
 	if a.activeKind == model.EntityTemplates {
 		headers, rows = a.projectTemplateList(headers, rows)
 	}
+	if a.activeKind == model.EntityProjects {
+		headers, rows = a.projectProjectList(headers, rows)
+	}
 	if a.activeKind == model.EntityWorkspaces {
 		headers, rows = a.projectWorkspaceList(headers, rows)
 	}
@@ -671,6 +688,7 @@ func (a *App) openSettings() {
 	a.workspaceFilterQuery = ""
 	a.workspaceFilterMode = false
 	a.templateColumnsTable = nil
+	a.projectColumnsTable = nil
 	a.workspaceColumnsTable = nil
 	a.integrationFilterAllRows = nil
 	a.integrationFilterRows = nil
@@ -954,6 +972,29 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 				return true
 			case 'q':
 				a.templateColumnsTable = nil
+				return false
+			}
+		}
+		return false
+	}
+
+	if a.projectColumnsTable != nil {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			a.toggleSelectedProjectColumn()
+			return true
+		case tcell.KeyEsc:
+			a.projectColumnsTable = nil
+			return false
+		case tcell.KeyCtrlD, tcell.KeyCtrlU:
+			return false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case ' ':
+				a.toggleSelectedProjectColumn()
+				return true
+			case 'q':
+				a.projectColumnsTable = nil
 				return false
 			}
 		}
@@ -1935,6 +1976,8 @@ func auditEntityRowMeta(row tabledata.Row) (entityID string, entityName string, 
 		return value.ID, value.Name, "executor", true
 	case client.Template:
 		return value.ID, value.Name, "template", true
+	case client.Project:
+		return value.ID, value.Name, "project", true
 	case client.Workspace:
 		return value.ID, value.Name, "workspace", true
 	case client.SourceCode:

@@ -108,6 +108,8 @@ func (a *App) editSessionForRow(row tabledata.Row) (editcore.Session, error) {
 		kind, id, name = "executor", value.ID, value.Name
 	case client.Template:
 		kind, id, name = "template", value.ID, value.Name
+	case client.Project:
+		kind, id, name = "project", value.ID, value.Name
 	case client.Workspace:
 		kind, id, name = "workspace", value.ID, value.Name
 	case client.SourceCode:
@@ -141,6 +143,8 @@ func (a *App) reopenEditedDetail(session editcore.Session) {
 		a.openExecutorOverview(session.ID, session.Name)
 	case "template":
 		a.openTemplateOverview(session.ID, session.Name)
+	case "project":
+		a.openProjectOverview(session.ID, session.Name)
 	case "workspace":
 		a.openWorkspaceOverview(session.ID, session.Name)
 	case "source_code":

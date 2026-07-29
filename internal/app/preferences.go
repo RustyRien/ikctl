@@ -12,6 +12,9 @@ func (a *App) applySavedViewPreferences() {
 	if visible := visibleColumnsFromFields(a.config.View.Templates.Columns, templateColumnOptions); len(visible) > 0 {
 		a.visibleTemplateColumns = visible
 	}
+	if visible := visibleColumnsFromFields(a.config.View.Projects.Columns, projectColumnOptions); len(visible) > 0 {
+		a.visibleProjectColumns = visible
+	}
 	if visible := visibleColumnsFromFields(a.config.View.Workspaces.Columns, workspaceColumnOptions); len(visible) > 0 {
 		a.visibleWorkspaceColumns = visible
 	}
@@ -39,6 +42,7 @@ func (a *App) applySavedViewPreferences() {
 func (a *App) saveViewPreferences() {
 	a.config.View.Resources.Columns = selectedFields(a.visibleResourceColumns, resourceColumnOptions)
 	a.config.View.Templates.Columns = selectedFields(a.visibleTemplateColumns, templateColumnOptions)
+	a.config.View.Projects.Columns = selectedFields(a.visibleProjectColumns, projectColumnOptions)
 	a.config.View.Workspaces.Columns = selectedFields(a.visibleWorkspaceColumns, workspaceColumnOptions)
 	a.config.View.Resources.StorageFilter = storageFilterRef(a.resourceStorageFilter)
 	a.config.View.Resources.WorkspaceFilter = workspaceFilterRef(a.resourceWorkspaceFilter)

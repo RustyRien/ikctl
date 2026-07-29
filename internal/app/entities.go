@@ -18,6 +18,8 @@ func (a *App) openOverview(row tabledata.Row) {
 	switch value := row.Raw.(type) {
 	case client.Resource:
 		a.openResourceOverview(value)
+	case client.Project:
+		a.openProjectOverview(value.ID, value.Name)
 	case client.Executor:
 		a.openExecutorOverview(value.ID, value.Name)
 	case client.SourceCode:
@@ -46,6 +48,8 @@ func (a *App) handleNav(key rune) {
 	switch key {
 	case 'r':
 		next = model.EntityResources
+	case 'p':
+		next = model.EntityProjects
 	case 'x':
 		next = model.EntityExecutors
 	case 'c':
@@ -112,8 +116,10 @@ func (a *App) handleNav(key rune) {
 	a.integrationFilterMode = false
 	a.resourceColumnsTable = nil
 	a.templateColumnsTable = nil
+	a.projectColumnsTable = nil
 	a.workspaceColumnsTable = nil
 	a.activeTemplateDetail = nil
+	a.activeProjectDetail = nil
 	a.activeExecutorDetail = nil
 	a.activeSourceCodeDetail = nil
 	a.activeSourceCodeVersionDetail = nil
@@ -154,6 +160,17 @@ func (a *App) handleSort(column int, asc bool) {
 		a.requestRefresh()
 		return
 	}
+	if a.activeKind == model.EntityProjects {
+		headers, _ := a.projectProjectList(render.ProjectListHeaders(), nil)
+		if column < 0 || column >= len(headers) {
+			return
+		}
+		if !a.currentModel().SetSortField(headers[column].SortField, asc) {
+			return
+		}
+		a.requestRefresh()
+		return
+	}
 	if a.activeKind == model.EntityWorkspaces {
 		headers, _ := a.projectWorkspaceList(render.WorkspaceListHeaders(), nil)
 		if column < 0 || column >= len(headers) {
@@ -177,6 +194,8 @@ func (a *App) openColumns() {
 		a.openResourceColumns()
 	case model.EntityTemplates:
 		a.openTemplateColumns()
+	case model.EntityProjects:
+		a.openProjectColumns()
 	case model.EntityWorkspaces:
 		a.openWorkspaceColumns()
 	}
@@ -218,6 +237,7 @@ func (a *App) openEntitySelector() {
 	a.integrationFilterMode = false
 	a.resourceColumnsTable = nil
 	a.templateColumnsTable = nil
+	a.projectColumnsTable = nil
 	a.workspaceColumnsTable = nil
 
 	primitive, table := entitySelectorView(a.activeKind)
@@ -240,22 +260,24 @@ func (a *App) applySelectedEntity() {
 	case 1:
 		key = 'r'
 	case 2:
-		key = 'x'
+		key = 'p'
 	case 3:
-		key = 'c'
+		key = 'x'
 	case 4:
-		key = 'v'
+		key = 'c'
 	case 5:
-		key = 'k'
+		key = 'v'
 	case 6:
-		key = 's'
+		key = 'k'
 	case 7:
-		key = 'W'
+		key = 's'
 	case 8:
-		key = 't'
+		key = 'W'
 	case 9:
-		key = 'w'
+		key = 't'
 	case 10:
+		key = 'w'
+	case 11:
 		key = 'i'
 	default:
 		return
@@ -287,6 +309,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 		key   string
 	}{
 		{kind: model.EntityResources, label: "Resources", key: "r"},
+		{kind: model.EntityProjects, label: "Projects", key: "p"},
 		{kind: model.EntityExecutors, label: "Executors", key: "x"},
 		{kind: model.EntitySourceCodes, label: "Source Codes", key: "c"},
 		{kind: model.EntitySourceCodeVersions, label: "Source Code Versions", key: "v"},
@@ -317,7 +340,7 @@ func entitySelectorView(activeKind model.EntityKind) (tview.Primitive, *tview.Ta
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow)
 	root.AddItem(table, 0, 1, true)
-	root.AddItem(overviewFooter("Enter apply  r/x/c/v/k/s/W/t/w/i quick switch  Esc/q close"), 1, 0, false)
+	root.AddItem(overviewFooter("Enter apply  r/p/x/c/v/k/s/W/t/w/i quick switch  Esc/q close"), 1, 0, false)
 	return root, table
 }
 
@@ -325,6 +348,8 @@ func entityTitle(kind model.EntityKind) string {
 	switch kind {
 	case model.EntityExecutors:
 		return "Executors"
+	case model.EntityProjects:
+		return "Projects"
 	case model.EntitySourceCodes:
 		return "Source Codes"
 	case model.EntitySourceCodeVersions:
@@ -381,6 +406,8 @@ func entityEmptyLabel(kind model.EntityKind) string {
 	switch kind {
 	case model.EntityExecutors:
 		return "No executors"
+	case model.EntityProjects:
+		return "No projects"
 	case model.EntitySourceCodes:
 		return "No source codes"
 	case model.EntitySourceCodeVersions:

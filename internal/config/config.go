@@ -34,8 +34,9 @@ type Config struct {
 }
 
 type ViewConfig struct {
-	Resources ResourceViewConfig `yaml:"resources,omitempty"`
-	Templates TemplateViewConfig `yaml:"templates,omitempty"`
+	Resources  ResourceViewConfig  `yaml:"resources,omitempty"`
+	Templates  TemplateViewConfig  `yaml:"templates,omitempty"`
+	Projects   TemplateViewConfig  `yaml:"projects,omitempty"`
 	Workspaces WorkspaceViewConfig `yaml:"workspaces,omitempty"`
 }
 
@@ -290,7 +291,7 @@ func (c Config) DefaultSortDescending() bool {
 }
 
 func (v ViewConfig) Empty() bool {
-	return v.Resources.Empty() && v.Templates.Empty() && v.Workspaces.Empty()
+	return v.Resources.Empty() && v.Templates.Empty() && v.Projects.Empty() && v.Workspaces.Empty()
 }
 
 func (v ResourceViewConfig) Empty() bool {

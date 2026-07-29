@@ -72,6 +72,7 @@ type App struct {
 	loadingStop               chan struct{}
 	loadingStopOnce           sync.Once
 	listTitle                 string
+	detailActionRow           *tabledata.Row
 }
 
 type detailPage struct {
@@ -97,6 +98,7 @@ const (
 	detailHotkeysIntegrationOverview
 	detailHotkeysStorageOverview
 	detailHotkeysWorkerOverview
+	detailHotkeysProjectOverview
 	detailHotkeysWorkspaceOverview
 )
 
@@ -444,6 +446,15 @@ func (a *App) OpenDetailPrimitive(title string, primitive tview.Primitive) {
 	a.app.SetFocus(primitive)
 }
 
+func (a *App) SetDetailActionRow(row tabledata.Row) {
+	copyRow := row
+	a.detailActionRow = &copyRow
+}
+
+func (a *App) ClearDetailActionRow() {
+	a.detailActionRow = nil
+}
+
 func (a *App) ResetHeaderHotkeys() {
 	a.filterMenuMode = false
 	a.header.ResetHotkeys()
@@ -517,6 +528,12 @@ func (a *App) SetWorkerOverviewHotkeys() {
 	a.filterMenuMode = false
 	a.header.SetWorkerOverviewHotkeys()
 	a.updateDetailHotkeys(detailHotkeysWorkerOverview)
+}
+
+func (a *App) SetProjectOverviewHotkeys() {
+	a.filterMenuMode = false
+	a.header.SetProjectOverviewHotkeys()
+	a.updateDetailHotkeys(detailHotkeysProjectOverview)
 }
 
 func (a *App) SetWorkspaceOverviewHotkeys() {
@@ -810,37 +827,37 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 				return nil
 			}
 			if event.Rune() == 'R' && a.reviewFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
+				if row, ok := a.currentActionRow(); ok {
 					a.reviewFn(row)
 					return nil
 				}
 			}
 			if event.Rune() == 'D' && a.deleteFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
+				if row, ok := a.currentActionRow(); ok {
 					a.deleteFn(row)
 					return nil
 				}
 			}
 			if event.Rune() == 'A' && a.actionMenuFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
+				if row, ok := a.currentActionRow(); ok {
 					a.actionMenuFn(row)
 					return nil
 				}
 			}
 			if event.Rune() == 'E' && a.editFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
+				if row, ok := a.currentActionRow(); ok {
 					a.editFn(row)
 					return nil
 				}
 			}
 			if event.Rune() == 'l' && a.logsFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
+				if row, ok := a.currentActionRow(); ok {
 					a.logsFn(row)
 					return nil
 				}
 			}
 			if event.Rune() == 'a' && a.auditFn != nil {
-				if row, ok := a.table.SelectedRow(); ok {
+				if row, ok := a.currentActionRow(); ok {
 					a.auditFn(row)
 					return nil
 				}
@@ -851,7 +868,7 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 			}
 		}
 		if event.Key() == tcell.KeyEnter && a.enterFn != nil {
-			if row, ok := a.table.SelectedRow(); ok {
+			if row, ok := a.currentActionRow(); ok {
 				a.enterFn(row)
 				return nil
 			}
@@ -992,6 +1009,13 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 	}
 
 	return event
+}
+
+func (a *App) currentActionRow() (tabledata.Row, bool) {
+	if a.detailVisible() && a.detailActionRow != nil {
+		return *a.detailActionRow, true
+	}
+	return a.table.SelectedRow()
 }
 
 func (a *App) renderStatus() {
@@ -1152,6 +1176,8 @@ func (a *App) applyDetailHotkeys(hotkeys detailHotkeys) {
 		a.header.SetStorageOverviewHotkeys()
 	case detailHotkeysWorkerOverview:
 		a.header.SetWorkerOverviewHotkeys()
+	case detailHotkeysProjectOverview:
+		a.header.SetProjectOverviewHotkeys()
 	case detailHotkeysWorkspaceOverview:
 		a.header.SetWorkspaceOverviewHotkeys()
 	default:
