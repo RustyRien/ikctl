@@ -1744,6 +1744,38 @@ func (a *App) streamEntityLogsIntoView(session int, entityID string, entityName 
 	}(session, entityID, entityName)
 }
 
+func (a *App) loadEntityLogsIntoView(session int, entityID string, textView *tview.TextView, historyLimit int, formatter logHistoryFormatter, errorPrefix string) {
+	go func(session int, entityID string) {
+		done := a.ui.BeginLoading()
+		defer done()
+
+		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+		defer cancel()
+
+		logs, total, err := a.client.LogsForEntity(ctx, entityID, []int{0, historyLimit})
+		if !a.isLiveLogSessionCurrent(session) {
+			return
+		}
+		if err != nil {
+			a.ui.Application().QueueUpdateDraw(func() {
+				if !a.isLiveLogSessionCurrent(session) {
+					return
+				}
+				textView.SetText(fmt.Sprintf("%s\n\n%v", errorPrefix, err))
+			})
+			return
+		}
+
+		a.ui.Application().QueueUpdateDraw(func() {
+			if !a.isLiveLogSessionCurrent(session) {
+				return
+			}
+			textView.SetText(formatter(logs, total, a.config.NoColors))
+			textView.ScrollToEnd()
+		})
+	}(session, entityID)
+}
+
 func (d *liveLogDeduper) ShouldSuppress(message client.LogStreamMessage) bool {
 	if d == nil || !d.active {
 		return false

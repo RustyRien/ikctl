@@ -65,7 +65,7 @@ func (a *App) openExecutorOverview(id string, name string) {
 			a.ui.OpenDetailPrimitive(title, primitive)
 			a.ui.SetExecutorOverviewHotkeys()
 			if lastLogView != nil && full != nil {
-				a.streamEntityLogsIntoView(session, full.ID, full.EntityName, lastLogView, 20, formatRecentLogs, "Failed to load recent logs.")
+				a.loadEntityLogsIntoView(session, full.ID, lastLogView, 20, formatRecentLogs, "Failed to load recent logs.")
 			}
 		})
 	}(session)

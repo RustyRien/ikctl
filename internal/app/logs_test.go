@@ -54,6 +54,13 @@ func TestFormatStreamingLogsNoHistory(t *testing.T) {
 	}
 }
 
+func TestFormatRecentLogsNoHistory(t *testing.T) {
+	formatted := formatRecentLogs(nil, 0, true)
+	if formatted != "Waiting for logs..." {
+		t.Fatalf("formatted = %q", formatted)
+	}
+}
+
 func TestFormattedMapListSection(t *testing.T) {
 	formatted := formattedMapListSection([]map[string]any{{"env": "prod", "team": "platform"}, {"region": "eu-west-1"}})
 	if formatted != "1. env=prod, team=platform\n2. region=eu-west-1" {

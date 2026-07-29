@@ -15,13 +15,9 @@ import (
 )
 
 func loginCmd() *cobra.Command {
-	var provider string
-	var scope string
-	var refreshToken string
-
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Store an InfraKitchen refresh token",
+		Short: "Store an InfraKitchen bearer token",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			flags.HasInsecureFlag = cmd.Flags().Changed("insecure-skip-tls-verify")
 			flags.HasNoColorsFlag = cmd.Flags().Changed("no-colors")
@@ -32,80 +28,45 @@ func loginCmd() *cobra.Command {
 			}
 			persistConfig(cmd, &cfg)
 
-			providerName, impliedScope, err := auth.ParseProvider(provider)
-			if err != nil {
-				return err
-			}
-			if providerName == "guest" {
-				if strings.TrimSpace(scope) == "" {
-					scope = impliedScope
-				}
-				if err := auth.ValidateGuestScope(scope); err != nil {
-					return err
-				}
-			} else if strings.TrimSpace(scope) != "" {
-				return fmt.Errorf("--scope is only supported for the guest provider")
-			}
-			if strings.TrimSpace(refreshToken) == "" {
-				value, err := promptSecret(cmd, providerName)
+			token := strings.TrimSpace(flags.Token)
+			if !isPersistentFlagSet(cmd, "token") {
+				value, err := promptToken(cmd)
 				if err != nil {
 					return err
 				}
-				refreshToken = value
+				token = value
 			}
-			if strings.TrimSpace(refreshToken) == "" {
-				return fmt.Errorf("refresh token cannot be empty")
+			if token == "" {
+				return fmt.Errorf("token cannot be empty")
+			}
+
+			cfg.Token = token
+			if err := cfg.Save(); err != nil {
+				return err
 			}
 
 			store, err := auth.OpenStore("")
 			if err != nil {
 				return err
 			}
-			entry := auth.Credentials{Provider: providerName, RefreshToken: refreshToken, Scope: scope}
-			if err := store.Put(cfg.Endpoint, entry); err != nil {
+			if err := store.Delete(cfg.Endpoint); err != nil {
 				return err
 			}
 
-			cli, err := auth.NewClient(cfg)
-			if err != nil {
-				return err
-			}
-			refreshCtx, refreshCancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer refreshCancel()
-			refreshed, err := cli.RefreshAuthToken(refreshCtx, providerName, refreshToken)
-			if err != nil {
-				return err
-			}
-			entry.Token = refreshed.Token
-			entry.TokenExpiry = refreshed.Expiration.Time
-			entry.RefreshToken = refreshed.RefreshToken
-			if err := store.Put(cfg.Endpoint, entry); err != nil {
-				return err
-			}
-
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "stored %s refresh token for %s\n", providerName, cfg.Endpoint)
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "stored token for %s\n", cfg.Endpoint)
 			return err
 		},
 	}
-
-	cmd.Flags().StringVar(&provider, "provider", "", "Auth provider: microsoft, github, guest, guest_default, guest_super, guest_infra")
-	cmd.Flags().StringVar(&scope, "scope", "", "Guest scope: default, super, infra")
-	cmd.Flags().StringVar(&refreshToken, "refresh-token", "", "Refresh token or guest token from InfraKitchen")
-	_ = cmd.MarkFlagRequired("provider")
 	return cmd
 }
 
-func promptSecret(cmd *cobra.Command, provider string) (string, error) {
-	label := "refresh token"
-	if provider == "guest" {
-		label = "guest token"
-	}
-	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "%s: ", label); err != nil {
+func promptToken(cmd *cobra.Command) (string, error) {
+	if _, err := fmt.Fprint(cmd.ErrOrStderr(), "token: "); err != nil {
 		return "", err
 	}
 	secret, err := term.ReadPassword(int(os.Stdin.Fd()))
 	if err != nil {
-		return "", fmt.Errorf("read %s: %w", label, err)
+		return "", fmt.Errorf("read token: %w", err)
 	}
 	if _, err := fmt.Fprintln(cmd.ErrOrStderr()); err != nil {
 		return "", err
@@ -126,6 +87,10 @@ func logoutCmd() *cobra.Command {
 				return err
 			}
 			persistConfig(cmd, &cfg)
+			cfg.Token = ""
+			if err := cfg.Save(); err != nil {
+				return err
+			}
 			store, err := auth.OpenStore("")
 			if err != nil {
 				return err

@@ -1057,7 +1057,7 @@ func (a *App) openResourceOverview(resource client.Resource) {
 			a.ui.OpenDetailPrimitive(title, primitive)
 			a.ui.SetResourceOverviewHotkeys()
 			if lastLogView != nil && full != nil {
-				a.streamEntityLogsIntoView(session, full.ID, full.EntityName, lastLogView, 20, formatRecentLogs, "Failed to load recent logs.")
+				a.loadEntityLogsIntoView(session, full.ID, lastLogView, 20, formatRecentLogs, "Failed to load recent logs.")
 			}
 		})
 	}(session)
