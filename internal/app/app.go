@@ -315,12 +315,14 @@ func (a *App) restoreDetailState(state any) {
 		a.auditLogRows = nil
 		a.auditLogTable = nil
 		a.overviewTree = nil
+		a.entitySelectorTable = nil
 		return
 	}
 	a.overviewJumpSelector = snapshot.OverviewJumpSelector
 	a.auditLogRows = snapshot.AuditLogRows
 	a.auditLogTable = snapshot.AuditLogTable
 	a.overviewTree = snapshot.OverviewTree
+	a.entitySelectorTable = nil
 	a.activeTemplateDetail = snapshot.ActiveTemplateDetail
 	a.activeProjectDetail = snapshot.ActiveProjectDetail
 	a.activeExecutorDetail = snapshot.ActiveExecutorDetail
@@ -902,7 +904,7 @@ func (a *App) handleOverlayKey(event *tcell.EventKey) bool {
 			case 'q':
 				a.entitySelectorTable = nil
 				return false
-			case 'r', 'x', 'c', 'v', 'k', 's', 'w', 't', 'i':
+			case 'r', 'p', 'x', 'c', 'v', 'k', 's', 'w', 'W', 't', 'i':
 				a.entitySelectorTable = nil
 				a.ui.CloseOverlay()
 				a.handleNav(event.Rune())

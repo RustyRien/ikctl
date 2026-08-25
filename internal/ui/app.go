@@ -73,6 +73,7 @@ type App struct {
 	loadingStopOnce           sync.Once
 	listTitle                 string
 	detailActionRow           *tabledata.Row
+	overlayFocus              tview.Primitive
 }
 
 type detailPage struct {
@@ -395,6 +396,7 @@ func (a *App) OpenOverlay(title string, text string) {
 	a.setOverlayContent(title, textView)
 	a.pages.ShowPage("overlay")
 	a.updateBreadcrumbs()
+	a.overlayFocus = textView
 	a.app.SetFocus(textView)
 }
 
@@ -428,6 +430,7 @@ func (a *App) OpenOverlayPrimitiveWithFocus(title string, primitive tview.Primit
 	a.setOverlayContent(title, primitive)
 	a.pages.ShowPage("overlay")
 	a.updateBreadcrumbs()
+	a.overlayFocus = focus
 	a.app.SetFocus(focus)
 }
 
@@ -557,14 +560,15 @@ func (a *App) CloseDetail() {
 	a.content.SwitchToPage("list")
 	a.ResetHeaderHotkeys()
 	a.updateBreadcrumbs()
-	a.app.SetFocus(a.table.Widget())
 	if a.detailRestoredFn != nil {
 		a.detailRestoredFn(nil)
 	}
+	a.app.SetFocus(a.table.Widget())
 }
 
 func (a *App) CloseOverlay() {
 	a.pages.HidePage("overlay")
+	a.overlayFocus = nil
 	a.updateBreadcrumbs()
 	if a.detailVisible() && a.detailBox != nil {
 		a.app.SetFocus(a.detailBox)
@@ -785,6 +789,9 @@ func (a *App) capture(event *tcell.EventKey) *tcell.EventKey {
 	}
 
 	if a.overlayVisible() {
+		if a.overlayFocus != nil {
+			a.app.SetFocus(a.overlayFocus)
+		}
 		if remapped := remapHalfPageScroll(event); remapped != nil {
 			return remapped
 		}

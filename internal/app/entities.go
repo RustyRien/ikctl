@@ -202,6 +202,10 @@ func (a *App) openColumns() {
 }
 
 func (a *App) openEntitySelector() {
+	if a.ui.DetailVisible() {
+		a.ui.CloseDetail()
+	}
+
 	a.auditLogRows = nil
 	a.auditLogTable = nil
 	a.settingsTable = nil
@@ -242,7 +246,7 @@ func (a *App) openEntitySelector() {
 
 	primitive, table := entitySelectorView(a.activeKind)
 	a.entitySelectorTable = table
-	a.ui.OpenOverlayPrimitive("Entity Selector", primitive)
+	a.ui.OpenOverlayPrimitiveWithFocus("Entity Selector", primitive, table)
 }
 
 func (a *App) applySelectedEntity() {

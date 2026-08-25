@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/electrolux-oss/ik-tui/internal/client"
+	"github.com/electrolux-oss/ik-tui/internal/tabledata"
 	"github.com/rivo/tview"
 )
 
 func (a *App) openExecutorOverview(id string, name string) {
 	session := a.nextLiveLogSession()
 	a.rememberCurrentDetailState()
+	a.ui.SetDetailActionRow(tabledata.Row{ID: id, Raw: client.Executor{ID: id, Name: name, EntityName: "executor"}})
 
 	title := fmt.Sprintf("Executor: %s", valueOr(name, id))
 	a.clearOverviewJumpState()

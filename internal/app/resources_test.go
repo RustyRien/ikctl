@@ -18,6 +18,7 @@ func TestRestoreDetailStateRestoresOverviewJumpActions(t *testing.T) {
 		auditLogRows:            []tabledata.Row{{ID: "a1"}},
 		auditLogTable:           tview.NewTable(),
 		overviewTree:            &overviewTreeSelection{},
+		entitySelectorTable:     tview.NewTable(),
 		activeStorageDetail:     &entityDetailSelection{ID: "st1", Name: "state", Kind: "storages"},
 		activeWorkspaceDetail:   &entityDetailSelection{ID: "w1", Name: "platform", Kind: "workspaces"},
 		activeIntegrationDetail: &entityDetailSelection{ID: "i1", Name: "aws", Kind: "integrations"},
@@ -42,6 +43,9 @@ func TestRestoreDetailStateRestoresOverviewJumpActions(t *testing.T) {
 	}
 	if len(a.auditLogRows) != 1 || a.auditLogTable == nil {
 		t.Fatal("expected audit state restored")
+	}
+	if a.entitySelectorTable != nil {
+		t.Fatal("expected entity selector state cleared on detail restore")
 	}
 	if a.activeStorageDetail == nil || a.activeWorkspaceDetail == nil || a.activeIntegrationDetail == nil {
 		t.Fatal("expected active detail selections restored")
